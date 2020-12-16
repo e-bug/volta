@@ -17,6 +17,7 @@ import os, sys
 sys.path.insert(0, BUTD_ROOT + "/tools")
 os.environ['GLOG_minloglevel'] = '2'
 
+import _init_paths
 from fast_rcnn.config import cfg, cfg_from_file, cfg_from_list
 from fast_rcnn.test import im_detect, _get_blobs
 from fast_rcnn.nms_wrapper import nms
