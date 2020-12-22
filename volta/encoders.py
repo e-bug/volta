@@ -859,11 +859,11 @@ class BertEncoder(nn.Module):
             all_encoder_layers_v:
             (all_attention_mask_t, all_attention_mask_v):
         """
-        all_encoder_layers_t = []
-        all_encoder_layers_v = []
+        all_encoder_layers_t = [txt_embedding]
+        all_encoder_layers_v = [img_embedding]
 
-        all_attention_mask_t = []
-        all_attention_mask_v = []
+        all_attention_mask_t = [None]
+        all_attention_mask_v = [None]
 
         for idx, layer in enumerate(self.layer):
             layer_type = self.num2type[idx]
@@ -871,10 +871,13 @@ class BertEncoder(nn.Module):
                 txt_embedding, img_embedding, txt_attention_probs, img_attention_probs = \
                     layer(txt_embedding, img_embedding, txt_attention_mask, img_attention_mask)
                 if output_all_attention_masks:
-                        all_attention_mask_t.append(txt_attention_probs)
-                        all_attention_mask_v.append(img_attention_probs)
+                    all_attention_mask_t.append(txt_attention_probs)
+                    all_attention_mask_v.append(img_attention_probs)
             else:
                 txt_embedding, img_embedding = layer(txt_embedding, img_embedding)
+                if output_all_attention_masks:
+                    all_attention_mask_t.append(None)
+                    all_attention_mask_v.append(None)
 
             if output_all_encoded_layers:
                 all_encoder_layers_t.append(txt_embedding)
@@ -1058,19 +1061,26 @@ class BertForVLPreTraining(BertPreTrainedModel):
         attr_confs=None,
         image_attrs=None,
         next_sentence_label=None,
+        output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
         # in this model, we first embed the images.
-        sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v, all_attention_mask = self.bert(
+        encoded_layers_t, encoded_layers_v, pooled_output_t, pooled_output_v, all_attention_mask = self.bert(
             input_ids,
             image_feat,
             image_loc,
             token_type_ids,
             attention_mask,
             image_attention_mask,
-            output_all_encoded_layers=False,
+            output_all_encoded_layers=output_all_encoded_layers,
             output_all_attention_masks=output_all_attention_masks,
         )
+        if output_all_encoded_layers:
+            sequence_output_t = encoded_layers_t[-1]
+            sequence_output_v = encoded_layers_v[-1]
+        else:
+            sequence_output_t = encoded_layers_t
+            sequence_output_v = encoded_layers_v
 
         prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, pooled_output = self.cls(
             sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v
@@ -1086,7 +1096,7 @@ class BertForVLPreTraining(BertPreTrainedModel):
             img_loss += pre_vis_criterions[ix](prediction_scores_v, weight, image_label, image_cls, image_feat,
                                                obj_labels, obj_confs, attr_labels, attr_confs)
 
-        masked_img_loss = img_loss.cpu().item() > 0
+        masked_img_loss = img_loss > 0 if type(img_loss) == int else img_loss.cpu().item() > 0
         if masked_img_loss:
             img_loss = img_loss.unsqueeze(0)
         else:
@@ -1109,8 +1119,13 @@ class BertForVLPreTraining(BertPreTrainedModel):
             next_sentence_loss = torch.zeros(1).cuda()
 
         if masked_img_loss or masked_lm_loss or next_sentence_loss:
+            if output_all_encoded_layers:
+                return masked_lm_loss, img_loss, next_sentence_loss, encoded_layers_t, encoded_layers_v
             return masked_lm_loss, img_loss, next_sentence_loss
         else:
+            if output_all_encoded_layers:
+                return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, all_attention_mask, \
+                       pooled_output, encoded_layers_t, encoded_layers_v
             return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, all_attention_mask, pooled_output
 
 
@@ -1168,7 +1183,7 @@ class BertForVLTasks(BertPreTrainedModel):
         output_all_attention_masks=False,
     ):
 
-        sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v, all_attention_mask = self.bert(
+        encoded_layers_t, encoded_layers_v, pooled_output_t, pooled_output_v, all_attention_mask = self.bert(
             input_txt,
             input_imgs,
             image_loc,
@@ -1178,8 +1193,14 @@ class BertForVLTasks(BertPreTrainedModel):
             output_all_encoded_layers=output_all_encoded_layers,
             output_all_attention_masks=output_all_attention_masks,
         )
+        if output_all_encoded_layers:
+            sequence_output_t = encoded_layers_t[-1]
+            sequence_output_v = encoded_layers_v[-1]
+        else:
+            sequence_output_t = encoded_layers_t
+            sequence_output_v = encoded_layers_v
 
-        linguisic_prediction, vision_prediction = None, None
+        linguistic_prediction, vision_prediction = None, None
 
         if self.fusion_method == "sum":
             pooled_output = self.dropout(pooled_output_t + pooled_output_v)
@@ -1203,4 +1224,7 @@ class BertForVLTasks(BertPreTrainedModel):
         else:
             vil_prediction = self.clfs_dict[task_id](pooled_output)
 
-        return vil_prediction, vision_prediction, linguisic_prediction, all_attention_mask
+        if output_all_encoded_layers:
+            return vil_prediction, vision_prediction, linguistic_prediction, all_attention_mask, \
+                   encoded_layers_t, encoded_layers_v
+        return vil_prediction, vision_prediction, linguistic_prediction, all_attention_mask
