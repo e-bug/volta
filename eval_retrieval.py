@@ -132,7 +132,7 @@ def main():
 
     # Model
     if args.zero_shot:
-        config.visual_target_weights = [0, 0, 0, 0, 0, 0, 0]
+        config.visual_target_weights = {}
         model = BertForVLPreTraining.from_pretrained(args.from_pretrained, config=config)
     else:
         model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])

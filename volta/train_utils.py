@@ -257,7 +257,7 @@ def freeze_layers(model):
 
 def print_and_log(string, logger=None):
     if logger is None:
-        logging.info(string)
+        print(string)
     else:
         logger.info(string)
 
