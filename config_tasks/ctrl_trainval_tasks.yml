@@ -5,7 +5,7 @@ TASK1:
   loss: BCEWithLogitLoss
   process: normal
   task_id: 1
-  dataroot: datasets/vqa
+  dataroot: datasets/vqa/annotations
   features_h5path1: datasets/mscoco/resnet101_faster_rcnn_genome_imgfeats/volta/trainval_feat.lmdb
   features_h5path2: ''
   train_annotations_jsonpath: ''
