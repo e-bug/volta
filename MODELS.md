@@ -13,7 +13,7 @@ For the latter, we distribute the weights that lead to higher average downstream
 | [LXMERT](https://sid.erda.dk/share_redirect/fYBrp01t8M)            | 67.98 |          | 71.58 |              |              |
 | [VL-BERT](https://sid.erda.dk/share_redirect/cCMQ8SXHdf)           | 67.44 | 71.00    |       |              |              |
 | [ViLBERT (CTRL)](https://sid.erda.dk/share_redirect/aQCx8cLWK7)    | 68.97 | 70.53    | 72.24 | 60.34        | 78.80        |
-| [LXMERT (CTRL)](https://sid.erda.dk/share_redirect/aBnbvwrVAq)     | 67.52 | 70.49    | 71.09 | 58.62        | 74.90        |
+| [LXMERT (CTRL)](https://sid.erda.dk/share_redirect/Dp1g16DIA5)     | 67.52 | 70.49    | 71.09 | 58.62        | 74.90        |
 | [VL-BERT (CTRL)](https://sid.erda.dk/share_redirect/Dr8geMQyRd)    | 68.23 | 71.23    | 73.22 | 57.62        | 70.90        |
 | [VisualBERT (CTRL)](https://sid.erda.dk/share_redirect/GCBlzUuoJl) | 69.03 | 70.02    | 72.70 | 61.48        | 75.20        |
 | [UNITER (CTRL)](https://sid.erda.dk/share_redirect/FeYIWpMSFg)     | 68.67 | 71.45    | 73.73 | 60.54        | 76.40        |
