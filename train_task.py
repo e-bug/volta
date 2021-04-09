@@ -305,7 +305,7 @@ def main():
                     save(save_path, logger, epoch_id, model, optimizer, scheduler,
                          global_step, tb_logger, default_gpu, max_score)
 
-        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score)
+        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu)
 
     tb_logger.txt_close()
 
