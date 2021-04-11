@@ -59,7 +59,7 @@ class Conceptual_Caption(RNGDataFlow):
             count = 0
             with open(infile) as tsv_in_file:
                 reader = csv.DictReader(tsv_in_file, delimiter='\t', fieldnames=FIELDNAMES)
-                for item in reader:
+                for item in reader:                    
                     image_id = item['img_id']
                     image_h = item['img_h']
                     image_w = item['img_w']
@@ -67,9 +67,16 @@ class Conceptual_Caption(RNGDataFlow):
                     boxes = np.frombuffer(base64.b64decode(item['boxes']), dtype=np.float32).reshape(int(num_boxes), 4)
                     features = np.frombuffer(base64.b64decode(item['features']), dtype=np.float32).reshape(int(num_boxes), 2048)
                     cls_prob = np.frombuffer(base64.b64decode(item['cls_prob']), dtype=np.float32).reshape(int(num_boxes), 1601)
+                    objects_id = np.frombuffer(base64.b64decode(item['objects_id']), dtype=np.int64)
+                    objects_conf = np.frombuffer(base64.b64decode(item['objects_conf']), dtype=np.float32)
+                    attrs_id = np.frombuffer(base64.b64decode(item['attrs_id']), dtype=np.int64)
+                    attrs_conf = np.frombuffer(base64.b64decode(item['attrs_conf']), dtype=np.float32)
+                    # cls_scores = np.frombuffer(base64.b64decode(item['classes']), dtype=np.float32).reshape(int(num_boxes), -1)
+                    attr_scores = np.frombuffer(base64.b64decode(item['attrs']), dtype=np.float32).reshape(int(num_boxes), -1)
                     caption = self.captions[image_id]
 
-                    yield [features, cls_prob, boxes, num_boxes, image_h, image_w, image_id, caption]
+                    yield [features, cls_prob, objects_id, objects_conf, attrs_id, attrs_conf, attr_scores, boxes, num_boxes, image_h, image_w, image_id, caption]
+
 
 if __name__ == '__main__':
     corpus_path = sys.argv[1]
