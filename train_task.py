@@ -303,9 +303,9 @@ def main():
                 if score > max_score:
                     max_score = score
                     save(save_path, logger, epoch_id, model, optimizer, scheduler,
-                         global_step, tb_logger, default_gpu, max_score)
+                         global_step, tb_logger, default_gpu, max_score, is_best=True)
 
-        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu)
+        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score)
 
     tb_logger.txt_close()
 
