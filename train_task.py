@@ -255,7 +255,8 @@ def main():
         model = torch.nn.DataParallel(model)
 
     # Save starting model
-    save(save_path, logger, -1, model, optimizer, scheduler, global_step, tb_logger, default_gpu)
+    if start_epoch == 0:
+        save(save_path, logger, -1, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score)
 
     # Print summary
     if default_gpu:
