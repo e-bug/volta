@@ -330,7 +330,7 @@ def resume(path, model, optimizer, scheduler, tb_logger):
             else:
                 new_dict[attr] = checkpoint["model_state_dict"][attr]
         model.load_state_dict(new_dict)
-        scheduler.load_state_dict(checkpoint.get("scheduler_state_dict", checkpoint["warmup_scheduler_state_dict"]))
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])  # OLD: checkpoint["warmup_scheduler_state_dict"]
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         global_step = checkpoint["global_step"]
         start_epoch = int(checkpoint["epoch_id"]) + 1
