@@ -1,7 +1,7 @@
 # VOLTA: Visiolinguistic Transformer Architectures
 
 This is the implementation of the framework described in the paper:
-> Emanuele Bugliarello, Ryan Cotterell, Naoaki Okazaki and Desmond Elliott. [Multimodal Pretraining Unmasked: Unifying the Vision and Language BERTs](https://arxiv.org/abs/2011.15124). arXiv preprint arXiv:2011.15124, November 2020.
+> Emanuele Bugliarello, Ryan Cotterell, Naoaki Okazaki and Desmond Elliott. [Multimodal Pretraining Unmasked: A Meta-Analysis and a Unified Framework of Vision-and-Language BERTs](https://arxiv.org/abs/2011.15124). Transactions of the Association for Computational Linguistics, 2021.
 
 We provide the code for reproducing our results, preprocessed data and pretrained models.
 
@@ -40,9 +40,10 @@ cd tools/refer; make
 python setup.py develop
 ```
 
+
 ## Data
 
-Check out [`data/README.md`](data/README.md) for links to preprocessed data and data preparation steps. 
+Check out [`data/README.md`](data/README.md) for links to preprocessed data and data preparation steps.
 
 
 ## Models
@@ -67,14 +68,14 @@ This work is licensed under the MIT license. See [`LICENSE`](LICENSE) for detail
 Third-party software and data sets are subject to their respective licenses. <br>
 If you find our code/data/models or ideas useful in your research, please consider citing the paper:
 ```
-@article{bugliarello-etal-2020-multimodal,
-    title = "Multimodal Pretraining Unmasked: {U}nifying the Vision and Language {BERT}s",
-    author = "Bugliarello, Emanuele  and
+@article{bugliarello-etal-2021-multimodal,
+    title = "Multimodal Pretraining Unmasked: {A} Meta-Analysis and a Unified Framework of Vision-and-Language {BERT}s",
+    author = "Bugliarello, Emanuele and
       Cotterell, Ryan and
       Okazaki, Naoaki and
       Elliott, Desmond",
-    journal = "arXiv preprint arXiv:2011.15124"
-    year = "2020",
+    journal = "Transactions of the Association for Computational Linguistics",
+    year = "2021",
     url = "https://arxiv.org/abs/2011.15124",
 }
 ```
@@ -91,4 +92,3 @@ Our codebase heavily relies on these excellent repositories:
 - [UNITER](https://github.com/ChenRocks/UNITER)
 - [pytorch-transformers](https://github.com/huggingface/pytorch-transformers)
 - [bottom-up-attention](https://github.com/peteanderson80/bottom-up-attention)
-
