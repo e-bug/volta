@@ -140,8 +140,7 @@ class NLVR2Dataset(Dataset):
         """
         for entry in self.entries:
             tokens = self._tokenizer.encode(entry["sentence"])
-            tokens = tokens[:max_length - 2]
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             segment_ids = [0] * len(tokens)
             input_mask = [1] * len(tokens)

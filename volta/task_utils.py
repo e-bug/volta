@@ -12,8 +12,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from pytorch_transformers.tokenization_bert import BertTokenizer
-from pytorch_transformers.tokenization_roberta import RobertaTokenizer
+from transformers import AutoTokenizer
 
 from volta.datasets import DatasetMapTrain, DatasetMapEval
 from volta.datasets._image_features_reader import ImageFeaturesH5Reader
@@ -288,10 +287,7 @@ def LoadLoss(task_cfg, task_id):
 
 
 def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
-    if "roberta" in args.bert_model:
-        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
-    else:
-        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
+    tokenizer = AutoTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
 
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]
@@ -319,7 +315,7 @@ def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
-            bert_model=args.bert_model,
+            bert_model=config.bert_model,
             padding_index=0,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],
@@ -351,7 +347,7 @@ def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
-            bert_model=args.bert_model,
+            bert_model=config.bert_model,
             padding_index=0,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],
@@ -372,10 +368,7 @@ def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
 
 
 def LoadDatasetEval(args, config, task_cfg, task_id):
-    if "roberta" in args.bert_model:
-        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
-    else:
-        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
+    tokenizer = AutoTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
 
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]
@@ -405,7 +398,7 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
-            bert_model=args.bert_model,
+            bert_model=config.bert_model,
             padding_index=0,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],
@@ -423,7 +416,7 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
-            bert_model=args.bert_model,
+            bert_model=config.bert_model,
             padding_index=0,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],

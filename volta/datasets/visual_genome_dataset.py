@@ -11,7 +11,7 @@ import logging
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from transformers import AutoTokenizer
 
 from ._image_features_reader import ImageFeaturesH5Reader
 
@@ -78,7 +78,7 @@ class GenomeQAClassificationDataset(Dataset):
         split: str,
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
-        tokenizer: BertTokenizer,
+        tokenizer: AutoTokenizer,
         bert_model,
         clean_datasets,
         padding_index: int = 0,
@@ -145,8 +145,7 @@ class GenomeQAClassificationDataset(Dataset):
             #     for w in tokens
             # ]
             tokens = self._tokenizer.encode(entry["question"])
-            tokens = tokens[: max_length - 2]
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             segment_ids = [0] * len(tokens)
             input_mask = [1] * len(tokens)

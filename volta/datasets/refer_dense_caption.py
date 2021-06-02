@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from transformers import AutoTokenizer
 from ._image_features_reader import ImageFeaturesH5Reader
 import _pickle as cPickle
 import sys
@@ -72,7 +72,7 @@ class ReferDenseCpationDataset(Dataset):
         split: str,
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
-        tokenizer: BertTokenizer,
+        tokenizer: AutoTokenizer,
         bert_model,
         padding_index: int = 0,
         max_seq_length: int = 20,
@@ -176,7 +176,7 @@ class ReferDenseCpationDataset(Dataset):
             # ]
 
             tokens = self._tokenizer.encode(entry["phrase"])
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             tokens = tokens[: self._max_seq_length]
             segment_ids = [0] * len(tokens)

@@ -12,7 +12,7 @@ source activate volta
 
 cd ../../..
 python train_concap.py \
-  --bert_model bert-base-uncased --config_file config/${MODEL_CONFIG}.json \
+  --config_file config/${MODEL_CONFIG}.json \
   --train_batch_size 512 --gradient_accumulation_steps 2 --max_seq_length 36 \
   --learning_rate 1e-4 --adam_epsilon 1e-8 --adam_betas 0.9 0.98 --weight_decay 0.01 --warmup_proportion 0.1 --clip_grad_norm 0.0 \
   --objective 1 \

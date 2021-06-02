@@ -180,7 +180,6 @@ class ConceptCapLoaderTrain(object):
         annotations_path,
         features_path,
         tokenizer,
-        bert_model,
         seq_len,
         batch_size=512,
         num_workers=25,
@@ -207,7 +206,6 @@ class ConceptCapLoaderTrain(object):
         preprocess_function = BertPreprocessBatch(
             caption_path,
             tokenizer,
-            bert_model,
             seq_len,
             36,
             self.num_dataset,
@@ -317,7 +315,6 @@ class ConceptCapLoaderVal(object):
             annotations_path,
             features_path,
             tokenizer,
-            bert_model,
             seq_len,
             batch_size=512,
             num_workers=25,
@@ -336,7 +333,6 @@ class ConceptCapLoaderVal(object):
         preprocess_function = BertPreprocessBatch(
             caption_path,
             tokenizer,
-            bert_model,
             seq_len,
             36,
             self.num_dataset,
@@ -405,7 +401,6 @@ class BertPreprocessBatch(object):
             self,
             caption_path,
             tokenizer,
-            bert_model,
             seq_len,
             region_len,
             data_size,
@@ -423,7 +418,6 @@ class BertPreprocessBatch(object):
         self.captions = list(json.load(open(caption_path, "r")).values())
         self.visualization = visualization
         self.objective = objective
-        self.bert_model = bert_model
         self.num_locs = num_locs
 
     def __call__(self, data):
@@ -462,7 +456,7 @@ class BertPreprocessBatch(object):
         image_location[:, 3] = image_location[:, 3] / float(image_h)
 
         caption, label = self.random_cap(caption)
-        tokens_caption = self.tokenizer.encode(caption)
+        tokens_caption = self.tokenizer.encode(caption, add_special_tokens=False)
 
         cur_example = InputExample(
             image_feat=image_feature,
@@ -552,7 +546,7 @@ class BertPreprocessBatch(object):
 
         # concatenate lm labels and account for CLS and SEP: [CLS] tokens [SEP]
         lm_label_ids = [-1] + tokens_label + [-1]
-        tokens = tokenizer.add_special_tokens_single_sentence(tokens)
+        tokens = tokenizer.build_inputs_with_special_tokens(tokens)
         segment_ids = [0] * len(tokens)
 
         input_ids = tokens

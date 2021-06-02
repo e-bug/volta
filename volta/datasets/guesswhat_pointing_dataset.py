@@ -11,7 +11,7 @@ import numpy as np
 import jsonlines
 import json
 
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from transformers import AutoTokenizer
 from ._image_features_reader import ImageFeaturesH5Reader
 import _pickle as cPickle
 
@@ -71,7 +71,7 @@ class GuessWhatPointingDataset(Dataset):
         split: str,
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
-        tokenizer: BertTokenizer,
+        tokenizer: AutoTokenizer,
         bert_model,
         clean_datasets,
         padding_index: int = 0,
@@ -216,8 +216,7 @@ class GuessWhatPointingDataset(Dataset):
                 sentence += "start " + sent + " answer " + ans + " stop "
 
             tokens = self._tokenizer.encode(sentence)
-            tokens = tokens[: self._max_seq_length - 2]
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             segment_ids = [0] * len(tokens)
             input_mask = [1] * len(tokens)

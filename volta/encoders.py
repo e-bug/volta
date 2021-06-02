@@ -944,10 +944,10 @@ class BertModel(BertPreTrainedModel):
         self.shared_embeddings = False
 
         # initialize word embedding
-        if config.model == "bert":
-            self.embeddings = BertEmbeddings(config)
-        elif config.model == "roberta":
+        if "roberta" in config.bert_model:
             self.embeddings = RobertaEmbeddings(config)
+        elif "bert" in config.bert_model:
+            self.embeddings = BertEmbeddings(config)
 
         # initialize vision embedding
         if config.image_embeddings in dual_embeddings:

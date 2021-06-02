@@ -12,7 +12,7 @@ source activate volta
 
 cd ../../..
 python train_task.py \
-	--bert_model bert-base-uncased --config_file config/${MODEL_CONFIG}.json --from_pretrained ${PRETRAINED} \
+	--config_file config/${MODEL_CONFIG}.json --from_pretrained ${PRETRAINED} \
 	--tasks_config_file config_tasks/${TASKS_CONFIG}.yml --task $TASK \
 	--adam_epsilon 1e-6 --adam_betas 0.9 0.999 --adam_correct_bias --weight_decay 0.0001 --warmup_steps 2000 --clip_grad_norm 1.0 \
 	--output_dir ${OUTPUT_DIR} \

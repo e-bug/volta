@@ -47,7 +47,7 @@ class BertConfig(object):
         objective=0,
         clf_hidden_size=1536,
         image_head_ln=True,
-        model="bert",
+        bert_model="bert-base-uncased",
         visualization=False,
         tt_attn_sublayers=[],
         tv_attn_sublayers=[],
@@ -146,7 +146,7 @@ class BertConfig(object):
             # Else
             self.visual_target_weights = visual_target_weights
             self.fixed_layers = fixed_layers
-            self.model = model
+            self.bert_model = bert_model
             # Pre-training
             self.fusion_method = fusion_method
             self.objective = objective

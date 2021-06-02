@@ -45,9 +45,6 @@ def parse_args():
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
-    parser.add_argument("--bert_model", default="bert-base-uncased", type=str,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                             "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
     parser.add_argument("--config_file", default="config/vilbert_base.json", type=str,
                         help="The config file which specified the model details.")
     parser.add_argument("--resume_file", default="", type=str,
@@ -173,8 +170,6 @@ def main():
         os.makedirs(args.output_dir)
 
     # Model
-    if "roberta" in args.bert_model:
-        config.model = "roberta"
     model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
     if task_cfg[task].get("embed_clf", None):
         logger.info('Initializing classifier weight for %s from pretrained word embeddings...' % task)

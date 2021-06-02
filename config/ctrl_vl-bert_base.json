@@ -10,6 +10,7 @@
   "pooler_size": 1024,
   "type_vocab_size": 3,
   "vocab_size": 30522,
+  "bert_model": "bert-base-uncased",
   "do_lower_case": true,
   "num_locs": 5,
   "add_global_imgfeat": "first",

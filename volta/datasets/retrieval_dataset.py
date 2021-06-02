@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from transformers import AutoTokenizer
 from ._image_features_reader import ImageFeaturesH5Reader
 
 
@@ -51,7 +51,7 @@ class RetrievalDataset(Dataset):
         split: str,
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
-        tokenizer: BertTokenizer,
+        tokenizer: AutoTokenizer,
         bert_model,
         padding_index: int = 0,
         max_seq_length: int = 20,
@@ -125,8 +125,7 @@ class RetrievalDataset(Dataset):
         for entry in self._entries:
 
             tokens = self._tokenizer.encode(entry["caption"])
-            tokens = tokens[: self._max_seq_length - 2]
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             segment_ids = [0] * len(tokens)
             input_mask = [1] * len(tokens)
@@ -283,7 +282,7 @@ class RetrievalDatasetVal(Dataset):
         split: str,
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
-        tokenizer: BertTokenizer,
+        tokenizer: AutoTokenizer,
         bert_model,
         padding_index: int = 0,
         max_seq_length: int = 20,
@@ -351,8 +350,7 @@ class RetrievalDatasetVal(Dataset):
         """
         for entry in self._caption_entries:
             tokens = self._tokenizer.encode(entry["caption"])
-            tokens = tokens[: self._max_seq_length - 2]
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
+            tokens = [tokens[0]] + tokens[1:-1][: self._max_seq_length - 2] + [tokens[-1]]
 
             segment_ids = [0] * len(tokens)
             input_mask = [1] * len(tokens)

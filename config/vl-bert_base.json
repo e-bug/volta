@@ -9,6 +9,7 @@
   "num_attention_heads": 12,
   "type_vocab_size": 3,
   "vocab_size": 30522,
+  "bert_model": "bert-base-uncased",
   "do_lower_case": true,
   "num_locs": 4,
   "add_global_imgfeat": "last",

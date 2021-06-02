@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 
-from pytorch_transformers.tokenization_bert import BertTokenizer
+from transformers import AutoTokenizer
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 
 from volta.config import BertConfig
@@ -45,8 +45,6 @@ def parse_args():
     # Model
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, roberta-base, ...")
-    parser.add_argument("--bert_model", default="bert-base-uncased", type=str,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, bert-large-uncased, ...")
     parser.add_argument("--config_file", type=str, default="config/vilbert_base.json",
                         help="The config file which specified the model details.")
     parser.add_argument("--resume_file", default="", type=str,
@@ -160,13 +158,13 @@ def main():
         torch.cuda.manual_seed_all(args.seed)
 
     # Datasets
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
-    train_dataset = ConceptCapLoaderTrain(args.annotations_path, args.features_path, tokenizer, args.bert_model,
+    tokenizer = AutoTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
+    train_dataset = ConceptCapLoaderTrain(args.annotations_path, args.features_path, tokenizer, config.bert_model,
                                           seq_len=args.max_seq_length, batch_size=args.train_batch_size,
                                           num_workers=args.num_workers, local_rank=args.local_rank,
                                           objective=args.objective, cache=cache,
                                           add_global_imgfeat=config.add_global_imgfeat, num_locs=config.num_locs)
-    valid_dataset = ConceptCapLoaderVal(args.annotations_path, args.features_path, tokenizer, args.bert_model,
+    valid_dataset = ConceptCapLoaderVal(args.annotations_path, args.features_path, tokenizer, config.bert_model,
                                         seq_len=args.max_seq_length, batch_size=args.train_batch_size, num_workers=2,
                                         objective=args.objective, add_global_imgfeat=config.add_global_imgfeat,
                                         num_locs=config.num_locs)

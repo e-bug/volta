@@ -103,7 +103,6 @@ class VMMultipleChoiceDataset(Dataset):
             #     for w in sentence_tokens
             # ]
             tokens = self._tokenizer.encode(entry["question"])
-            tokens = self._tokenizer.add_special_tokens_single_sentence(tokens)
 
             tokens = tokens[:max_length]
             segment_ids = [0] * len(tokens)

@@ -42,9 +42,6 @@ def parse_args():
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
-    parser.add_argument("--bert_model", default="bert-base-uncased", type=str,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                             "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
     parser.add_argument("--config_file", default="config/bert_config.json", type=str,
                         help="The config file which specified the model details.")
     # Output
@@ -133,8 +130,6 @@ def main():
                          1, save_logger=False, txt_name="eval.txt")
 
     # Model
-    if "roberta" in args.bert_model:
-        config.model = "roberta"
     model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
 
     # Optimization details

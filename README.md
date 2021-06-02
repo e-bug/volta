@@ -92,3 +92,4 @@ Our codebase heavily relies on these excellent repositories:
 - [UNITER](https://github.com/ChenRocks/UNITER)
 - [pytorch-transformers](https://github.com/huggingface/pytorch-transformers)
 - [bottom-up-attention](https://github.com/peteanderson80/bottom-up-attention)
+- [transformers](https://github.com/huggingface/transformers)
