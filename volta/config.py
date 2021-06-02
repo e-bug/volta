@@ -39,6 +39,8 @@ class BertConfig(object):
         v_hidden_dropout_prob=0.1,
         v_initializer_range=0.2,
         visual_target_weights={"0": 1},
+        qa_task_weight=0.0,
+        qa_num_answers=0,
         fixed_layers=[],
         fusion_method="mul",
         objective=0,
@@ -119,6 +121,8 @@ class BertConfig(object):
             self.v_hidden_dropout_prob = v_hidden_dropout_prob
             self.v_initializer_range = v_initializer_range
             self.v_pooler_size = v_pooler_size
+            self.qa_task_weight = qa_task_weight
+            self.qa_num_answers = qa_num_answers
             # Text-Vision
             self.tt_attn_sublayers = tt_attn_sublayers
             self.tv_attn_sublayers = tv_attn_sublayers

@@ -178,7 +178,7 @@ def main():
 
         with torch.no_grad():
             if args.zero_shot:
-                _, _, vil_logit, _, _ = model(question, features, spatials, segment_ids, input_mask, image_mask)
+                _, _, vil_logit, _, _, _ = model(question, features, spatials, segment_ids, input_mask, image_mask)
 
                 score_matrix[
                     caption_idx, image_idx * 500: (image_idx + 1) * 500

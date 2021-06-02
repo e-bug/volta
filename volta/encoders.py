@@ -737,6 +737,21 @@ class BertImagePredictionHead(nn.Module):
         return output
 
 
+class LxmertAnswerHead(nn.Module):
+    def __init__(self, config, num_answers):
+        super().__init__()
+        hid_dim = config.v_hidden_size
+        self.logit_fc = nn.Sequential(
+            nn.Linear(hid_dim, hid_dim * 2),
+            GeLU(),
+            BertLayerNorm(hid_dim * 2, eps=1e-12),
+            nn.Linear(hid_dim * 2, num_answers)
+        )
+
+    def forward(self, hidden_states):
+        return self.logit_fc(hidden_states)
+
+
 class BertPreTrainingHeads(nn.Module):
     def __init__(self, config, bert_model_embedding_weights):
         super(BertPreTrainingHeads, self).__init__()
@@ -746,6 +761,10 @@ class BertPreTrainingHeads(nn.Module):
         else:
             self.bi_seq_relationship = nn.Linear(config.pooler_size, 2)
         self.imagePredictions = BertImagePredictionHead(config)
+        if config.qa_task_weight:
+            self.qaPredictions = LxmertAnswerHead(config)
+        else:
+            self.qaPredictions = lambda x: None
         self.fusion_method = config.fusion_method
         self.dropout = nn.Dropout(0.1)
         self.apply(self.init_weights)
@@ -780,8 +799,9 @@ class BertPreTrainingHeads(nn.Module):
         prediction_scores_t = self.predictions(sequence_output_t)
         seq_relationship_score = self.bi_seq_relationship(pooled_output)
         prediction_scores_v_dict = self.imagePredictions(sequence_output_v)
+        vqa_score = self.qaPredictions(pooled_output)
 
-        return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, pooled_output
+        return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, vqa_score, pooled_output
 
 
 class SimpleClassifier(nn.Module):
@@ -1032,7 +1052,11 @@ class BertForVLPreTraining(BertPreTrainedModel):
 
         self.loss_fct = nn.CrossEntropyLoss(ignore_index=-1)
         self.visual_target_weights = config.visual_target_weights
+        self.qa_weight = config.qa_task_weight
+        self.qa_num_answers = config.qa_num_answers
         print("model's visual targets are ", [ix for ix, w in config.visual_target_weights.items() if w > 0])
+        if self.qa_weight:
+            print("model's qa target is ", self.qa_weight)
 
         self.add_global_imgfeat = int(config.add_global_imgfeat is not None)
 
@@ -1061,6 +1085,7 @@ class BertForVLPreTraining(BertPreTrainedModel):
         attr_confs=None,
         image_attrs=None,
         next_sentence_label=None,
+        answers=None,
         output_all_encoded_layers=False,
         output_all_attention_masks=False,
     ):
@@ -1082,7 +1107,7 @@ class BertForVLPreTraining(BertPreTrainedModel):
             sequence_output_t = encoded_layers_t
             sequence_output_v = encoded_layers_v
 
-        prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, pooled_output = self.cls(
+        prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, vqa_score, pooled_output = self.cls(
             sequence_output_t, sequence_output_v, pooled_output_t, pooled_output_v
         )
 
@@ -1095,12 +1120,14 @@ class BertForVLPreTraining(BertPreTrainedModel):
                 prediction_scores_v = prediction_scores_v_dict[ix][:, self.add_global_imgfeat:]
             img_loss += pre_vis_criterions[ix](prediction_scores_v, weight, image_label, image_cls, image_feat,
                                                obj_labels, obj_confs, attr_labels, attr_confs)
+        if self.qa_weight and answers:
+            img_loss += self.qa_weight * self.loss_fct(vqa_score.view(-1, self.qa_num_answers), answers.view(-1))
 
         masked_img_loss = img_loss > 0 if type(img_loss) == int else img_loss.cpu().item() > 0
         if masked_img_loss:
             img_loss = img_loss.unsqueeze(0)
         else:
-            img_loss = torch.zeros(1).cuda()
+            img_loss = torch.zeros(1).to(prediction_scores_t.device)
 
         if masked_lm_labels is not None:
             masked_lm_loss = self.loss_fct(
@@ -1108,7 +1135,7 @@ class BertForVLPreTraining(BertPreTrainedModel):
                 masked_lm_labels.view(-1),
             ).unsqueeze(0)
         else:
-            masked_lm_loss = torch.zeros(1).cuda()
+            masked_lm_loss = torch.zeros(1).to(prediction_scores_t.device)
 
         if (seq_relationship_score is not None) and (next_sentence_label is not None):
             next_sentence_loss = self.loss_fct(
@@ -1116,7 +1143,7 @@ class BertForVLPreTraining(BertPreTrainedModel):
                 next_sentence_label.view(-1)
             ).unsqueeze(0)
         else:
-            next_sentence_loss = torch.zeros(1).cuda()
+            next_sentence_loss = torch.zeros(1).to(prediction_scores_t.device)
 
         if masked_img_loss or masked_lm_loss or next_sentence_loss:
             if output_all_encoded_layers:
@@ -1125,8 +1152,9 @@ class BertForVLPreTraining(BertPreTrainedModel):
         else:
             if output_all_encoded_layers:
                 return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, all_attention_mask, \
-                       pooled_output, encoded_layers_t, encoded_layers_v
-            return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, all_attention_mask, pooled_output
+                        pooled_output, encoded_layers_t, encoded_layers_v
+            return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, vqa_score, \
+                    all_attention_mask, pooled_output
 
 
 class BertForVLTasks(BertPreTrainedModel):
@@ -1135,8 +1163,6 @@ class BertForVLTasks(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         self.dropout = nn.Dropout(dropout_prob)
-        # FIXME ?
-        # self.cls = BertPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
 
         self.config = config
         self.task_cfg = task_cfg
