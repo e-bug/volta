@@ -291,6 +291,7 @@ class RetrievalDatasetVal(Dataset):
         num_locs=5,
         add_global_imgfeat=None,
         append_mask_sep=False,
+        num_subiters=2,
     ):
         # All the keys in `self._entries` would be present in `self._image_features_reader`
         self._image_entries, self._caption_entries = _load_annotationsVal(annotations_jsonpath, task)
@@ -307,6 +308,11 @@ class RetrievalDatasetVal(Dataset):
 
         self.tokenize()
         self.tensorize()
+
+        self.num_subiters = num_subiters
+        self.num_images = len(self._image_entries)
+        self.max_num_images = self.num_images // self.num_subiters
+        self.batches_per_caption = self.num_images // self.max_num_images + self.num_images % self.max_num_images
 
         self.features_all = np.zeros((len(self._image_entries), self._max_region_num, 2048))
         self.spatials_all = np.zeros((len(self._image_entries), self._max_region_num, self._num_locs))
@@ -376,27 +382,20 @@ class RetrievalDatasetVal(Dataset):
 
     def __getitem__(self, index):
         # we iterate through every caption here.
-        caption_idx = int(index / 2)
-        image_idx = index % 2
+        caption_idx = int(index / self.num_subiters)
+        image_idx = index % self.num_subiters
 
-        if image_idx == 0:
-            image_entries = self._image_entries[:500]
-            features_all = self.features_all[:500]
-            spatials_all = self.spatials_all[:500]
-            image_mask_all = self.image_mask_all[:500]
-
-        else:
-            image_entries = self._image_entries[500:]
-            features_all = self.features_all[500:]
-            spatials_all = self.spatials_all[500:]
-            image_mask_all = self.image_mask_all[500:]
+        image_entries = self._image_entries[self.max_num_images * (image_idx):self.max_num_images * (image_idx + 1)]
+        features_all = self.features_all[self.max_num_images * (image_idx):self.max_num_images * (image_idx + 1)]
+        spatials_all = self.spatials_all[self.max_num_images * (image_idx):self.max_num_images * (image_idx + 1)]
+        image_mask_all = self.image_mask_all[self.max_num_images * (image_idx):self.max_num_images * (image_idx + 1)]
 
         entry = self._caption_entries[caption_idx]
         caption = entry["token"]
         input_mask = entry["input_mask"]
         segment_ids = entry["segment_ids"]
 
-        target_all = torch.zeros(500)
+        target_all = torch.zeros(self.max_num_images)
         for i, image_id in enumerate(image_entries):
             if image_id == entry["image_id"]:
                 target_all[i] = 1
@@ -414,4 +413,4 @@ class RetrievalDatasetVal(Dataset):
         )
 
     def __len__(self):
-        return len(self._caption_entries) * 2
+        return len(self._caption_entries) * self.num_subiters

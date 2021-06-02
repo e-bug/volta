@@ -22,7 +22,7 @@ import torch.distributed as dist
 
 from volta.config import BertConfig
 from volta.encoders import BertForVLTasks, BertForVLPreTraining
-from volta.task_utils import LoadDatasetEval, LoadLoss, ForwardModelsTrain, ForwardModelsVal
+from volta.task_utils import LoadDatasetEval
 
 
 logging.basicConfig(
@@ -55,8 +55,14 @@ def parse_args():
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
+    parser.add_argument("--num_images", default=1000, type=int,
+                        help="Number of images.")
+    parser.add_argument("--captions_per_image", default=5, type=int,
+                        help="Number of captions per image.")
+    parser.add_argument("--num_subiters", default=2, type=int,
+                        help="Number of sub-batches to evaluate each caption.")
     # Text
-    parser.add_argument("--do_lower_case", default=True, type=bool,
+    parser.add_argument("--do_lower_case", action='store_true', default=True,
                         help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
@@ -129,6 +135,7 @@ def main():
 
     # Dataset
     batch_size, task2num_iters, dset_val, dl_val = LoadDatasetEval(args, config, task_cfg, args.task)
+    max_subiter_images = dset_val.max_num_images
 
     # Model
     if args.zero_shot:
@@ -161,9 +168,9 @@ def main():
     model.eval()
     results = []
     others = []
-    score_matrix = np.zeros((5000, 1000))
-    target_matrix = np.zeros((5000, 1000))
-    rank_matrix = np.ones(5000) * 1000
+    score_matrix = np.zeros((args.num_images * args.captions_per_image, args.num_images))
+    target_matrix = np.zeros((args.num_images * args.captions_per_image, args.num_images))
+    rank_vector = np.ones(args.num_images * args.captions_per_image) * args.num_images
     count = 0
     for i, batch in tqdm(enumerate(dl_val), total=task2num_iters[task]):
         batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
@@ -181,23 +188,23 @@ def main():
                 _, _, vil_logit, _, _, _ = model(question, features, spatials, segment_ids, input_mask, image_mask)
 
                 score_matrix[
-                    caption_idx, image_idx * 500: (image_idx + 1) * 500
+                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
                 ] = (torch.softmax(vil_logit, dim=1)[:, 0].view(-1).cpu().numpy())
                 target_matrix[
-                    caption_idx, image_idx * 500: (image_idx + 1) * 500
+                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
                 ] = (target.view(-1).float().cpu().numpy())
 
             else:
                 vil_logit, _, _, _ = model(question, features, spatials, task, segment_ids, input_mask, image_mask)
 
                 score_matrix[
-                    caption_idx, image_idx * 500: (image_idx + 1) * 500
+                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
                 ] = (vil_logit.view(-1).cpu().numpy())
                 target_matrix[
-                    caption_idx, image_idx * 500: (image_idx + 1) * 500
+                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
                 ] = (target.view(-1).float().cpu().numpy())
 
-            if image_idx.item() == 1:
+            if image_idx.item() == args.num_subiters - 1:
                 rank = np.where(
                     (
                         np.argsort(-score_matrix[caption_idx])
@@ -205,15 +212,15 @@ def main():
                     )
                     == 1
                 )[0][0]
-                rank_matrix[caption_idx] = rank
+                rank_vector[caption_idx] = rank
 
-                rank_matrix_tmp = rank_matrix[: caption_idx + 1]
-                r1 = 100.0 * np.sum(rank_matrix_tmp < 1) / len(rank_matrix_tmp)
-                r5 = 100.0 * np.sum(rank_matrix_tmp < 5) / len(rank_matrix_tmp)
-                r10 = 100.0 * np.sum(rank_matrix_tmp < 10) / len(rank_matrix_tmp)
+                cur_rank_vector = rank_vector[:caption_idx + 1]
+                r1 = 100.0 * np.sum(cur_rank_vector < 1) / len(cur_rank_vector)
+                r5 = 100.0 * np.sum(cur_rank_vector < 5) / len(cur_rank_vector)
+                r10 = 100.0 * np.sum(cur_rank_vector < 10) / len(cur_rank_vector)
 
-                medr = np.floor(np.median(rank_matrix_tmp) + 1)
-                meanr = np.mean(rank_matrix_tmp) + 1
+                medr = np.floor(np.median(cur_rank_vector) + 1)
+                meanr = np.mean(cur_rank_vector) + 1
                 print(
                     "%d Final r1:%.3f, r5:%.3f, r10:%.3f, mder:%.3f, meanr:%.3f"
                     % (count, r1, r5, r10, medr, meanr)
@@ -222,12 +229,12 @@ def main():
                 results.append(np.argsort(-score_matrix[caption_idx]).tolist()[:20])
         count += 1
 
-    r1 = 100.0 * np.sum(rank_matrix < 1) / len(rank_matrix)
-    r5 = 100.0 * np.sum(rank_matrix < 5) / len(rank_matrix)
-    r10 = 100.0 * np.sum(rank_matrix < 10) / len(rank_matrix)
+    r1 = 100.0 * np.sum(rank_vector < 1) / len(rank_vector)
+    r5 = 100.0 * np.sum(rank_vector < 5) / len(rank_vector)
+    r10 = 100.0 * np.sum(rank_vector < 10) / len(rank_vector)
 
-    medr = np.floor(np.median(rank_matrix) + 1)
-    meanr = np.mean(rank_matrix) + 1
+    medr = np.floor(np.median(rank_vector) + 1)
+    meanr = np.mean(rank_vector) + 1
 
     print("************************************************")
     print("****************Image Retrieval*****************")
@@ -246,21 +253,21 @@ def main():
     json.dump(others, open(json_path + "_others.json", "w"))
 
     # Text Retrieval
-    rank_matrix = np.zeros(1000)
-    for image_idx in range(1000):
+    rank_vector = np.zeros(args.num_images)
+    for image_idx in range(args.num_images):
         ranks = []
         tgt_captions = np.where(target_matrix[:, image_idx] == 1)[0]
         sorted_scores = np.argsort(-score_matrix[:, image_idx])
         for tgt_caption in tgt_captions:
             ranks.append(np.where((sorted_scores == tgt_caption) == 1)[0][0])
-        rank_matrix[image_idx] = min(ranks)
+        rank_vector[image_idx] = min(ranks)
 
-    r1 = 100.0 * np.sum(rank_matrix < 1) / len(rank_matrix)
-    r5 = 100.0 * np.sum(rank_matrix < 5) / len(rank_matrix)
-    r10 = 100.0 * np.sum(rank_matrix < 10) / len(rank_matrix)
+    r1 = 100.0 * np.sum(rank_vector < 1) / len(rank_vector)
+    r5 = 100.0 * np.sum(rank_vector < 5) / len(rank_vector)
+    r10 = 100.0 * np.sum(rank_vector < 10) / len(rank_vector)
 
-    medr = np.floor(np.median(rank_matrix) + 1)
-    meanr = np.mean(rank_matrix) + 1
+    medr = np.floor(np.median(rank_vector) + 1)
+    meanr = np.mean(rank_vector) + 1
 
     print("************************************************")
     print("****************Text Retrieval******************")
