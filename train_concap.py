@@ -61,8 +61,6 @@ def parse_args():
                         help="The maximum total input sequence length after WordPiece tokenization. \n"
                              "Sequences longer than this will be truncated, and sequences shorter \n"
                              "than this will be padded.")
-    parser.add_argument("--do_lower_case", action='store_true', default=True,
-                        help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Training
     parser.add_argument("--train_batch_size", default=512, type=int,
                         help="Total batch size for training.")
@@ -162,7 +160,7 @@ def main():
         torch.cuda.manual_seed_all(args.seed)
 
     # Datasets
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
     train_dataset = ConceptCapLoaderTrain(args.annotations_path, args.features_path, tokenizer, args.bert_model,
                                           seq_len=args.max_seq_length, batch_size=args.train_batch_size,
                                           num_workers=args.num_workers, local_rank=args.local_rank,

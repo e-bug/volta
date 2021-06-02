@@ -24,7 +24,7 @@ import torch.distributed as dist
 from volta.config import BertConfig
 from volta.encoders import BertForVLTasks
 from volta.train_utils import tbLogger
-from volta.task_utils import LoadDatasetEval, LoadLoss, ForwardModelsTrain, ForwardModelsVal, EvaluatingModel
+from volta.task_utils import LoadDatasetEval, LoadLoss, EvaluatingModel
 
 
 logging.basicConfig(
@@ -57,9 +57,6 @@ def parse_args():
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
-    # Text
-    parser.add_argument("--do_lower_case", default=True, type=bool,
-                        help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
                         help="which split to use.")

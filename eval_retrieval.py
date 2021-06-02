@@ -61,9 +61,6 @@ def parse_args():
                         help="Number of captions per image.")
     parser.add_argument("--num_subiters", default=2, type=int,
                         help="Number of sub-batches to evaluate each caption.")
-    # Text
-    parser.add_argument("--do_lower_case", action='store_true', default=True,
-                        help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
                         help="which split to use.")

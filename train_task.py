@@ -64,9 +64,6 @@ def parse_args():
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
-    # Text
-    parser.add_argument("--do_lower_case", action='store_true', default=True,
-                        help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Training
     parser.add_argument("--num_train_epochs", default=20, type=int,
                         help="Total number of training epochs to perform.")

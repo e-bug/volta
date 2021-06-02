@@ -24,6 +24,7 @@ class BertConfig(object):
         attention_probs_dropout_prob=0.1,
         max_position_embeddings=512,
         type_vocab_size=2,
+        do_lower_case=True,
         num_locs=5,
         v_coordinate_embeddings_dim=None,
         add_global_imgfeat=None,
@@ -105,6 +106,7 @@ class BertConfig(object):
             self.attention_probs_dropout_prob = attention_probs_dropout_prob
             self.max_position_embeddings = max_position_embeddings
             self.type_vocab_size = type_vocab_size
+            self.do_lower_case = do_lower_case
             self.initializer_range = initializer_range
             self.pooler_size = pooler_size
             # Vision

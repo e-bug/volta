@@ -289,9 +289,9 @@ def LoadLoss(task_cfg, task_id):
 
 def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
     if "roberta" in args.bert_model:
-        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
     else:
-        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
 
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]
@@ -373,9 +373,9 @@ def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
 
 def LoadDatasetEval(args, config, task_cfg, task_id):
     if "roberta" in args.bert_model:
-        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+        tokenizer = RobertaTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
     else:
-        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+        tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=config.do_lower_case)
 
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]

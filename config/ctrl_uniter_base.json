@@ -10,6 +10,7 @@
   "pooler_size": 1024,
   "type_vocab_size": 2,
   "vocab_size": 30522,
+  "do_lower_case": true,
   "num_locs": 5,
   "add_global_imgfeat": "first",
   "image_embeddings": "uniter",
