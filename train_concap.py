@@ -251,7 +251,7 @@ def main():
         model = torch.nn.DataParallel(model)
 
     # Save starting model
-    save(save_path, logger, -1, model, optimizer, scheduler, global_step, tb_logger, default_gpu)
+    save(save_path, logger, -1, model, optimizer, scheduler, global_step, tb_logger, default_gpu, -1)
 
     # Print summary
     if default_gpu:
@@ -347,7 +347,7 @@ def main():
                 sys.stdout.flush()
 
         torch.set_grad_enabled(True)
-        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu)
+        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, loss)
 
     if default_gpu:
         tb_logger.txt_close()
