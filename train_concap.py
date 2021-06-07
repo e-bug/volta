@@ -159,12 +159,12 @@ def main():
 
     # Datasets
     tokenizer = AutoTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
-    train_dataset = ConceptCapLoaderTrain(args.annotations_path, args.features_path, tokenizer, config.bert_model,
+    train_dataset = ConceptCapLoaderTrain(args.annotations_path, args.features_path, tokenizer,
                                           seq_len=args.max_seq_length, batch_size=args.train_batch_size,
                                           num_workers=args.num_workers, local_rank=args.local_rank,
                                           objective=args.objective, cache=cache,
                                           add_global_imgfeat=config.add_global_imgfeat, num_locs=config.num_locs)
-    valid_dataset = ConceptCapLoaderVal(args.annotations_path, args.features_path, tokenizer, config.bert_model,
+    valid_dataset = ConceptCapLoaderVal(args.annotations_path, args.features_path, tokenizer,
                                         seq_len=args.max_seq_length, batch_size=args.train_batch_size, num_workers=2,
                                         objective=args.objective, add_global_imgfeat=config.add_global_imgfeat,
                                         num_locs=config.num_locs)
