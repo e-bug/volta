@@ -178,6 +178,8 @@ def main():
     logdir = os.path.join(args.logdir, timestamp)
     if default_gpu:
         tb_logger = tbLogger(logdir, save_path, task_names, task_ids, task2num_iters, args.grad_acc_steps)
+    else:
+        tb_logger = None
 
     # Model
     if args.from_pretrained:
