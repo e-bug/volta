@@ -114,6 +114,11 @@ class tbLogger(object):
 
         self.task_step_val[task_id] += self.gradient_accumulation_steps
         self.task_datasize_val[task_id] += batch_size
+        
+        # plot on tensorboard.
+        self.linePlot(stepId, masked_loss_t, split, self.task_id2name[task_id] + "_masked_loss_t")
+        self.linePlot(stepId, masked_loss_v, split, self.task_id2name[task_id] + "_masked_loss_v")
+        self.linePlot(stepId, next_sentence_loss, split, self.task_id2name[task_id] + "_next_sentence_loss")
 
     def showLossValAll(self):
         progressInfo = "Eval Ep: %d " % self.epochId
