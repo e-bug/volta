@@ -18,6 +18,11 @@ For the latter, we distribute the weights that lead to higher average downstream
 | [VisualBERT (CTRL)](https://sid.erda.dk/share_redirect/GCBlzUuoJl) | 69.03 | 70.02    | 72.70 | 61.48        | 75.20        |
 | [UNITER (CTRL)](https://sid.erda.dk/share_redirect/FeYIWpMSFg)     | 68.67 | 71.45    | 73.73 | 60.54        | 76.40        |
 
+### Conversions of Original Models into VOLTA
+| Model             | Source |
+|-------------------|--------|
+| [LXMERT (Original)](https://sid.erda.dk/share_redirect/cFGANaAtmN) | [airsplay/lxmert](https://nlp.cs.unc.edu/data/github_pretrain/lxmert20/Epoch20_LXRT.pth) |
+
 
 ## Models Definition
 
