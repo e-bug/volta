@@ -18,6 +18,7 @@ from .guesswhat_dataset import GuessWhatDataset
 from .visual7w_pointing_dataset import Visual7wPointingDataset
 from .guesswhat_pointing_dataset import GuessWhatPointingDataset
 from .flickr_grounding_dataset import FlickrGroundingDataset
+from .flickr30ke_ablation_dataset import FlickrVis4LangDataset, FlickrLang4VisDataset
 
 
 __all__ = [
@@ -36,6 +37,8 @@ __all__ = [
     "Visual7wPointingDataset",
     "GuessWhatPointingDataset",
     "FlickrGroundingDataset",
+    "FlickrVis4LangDataset",
+    "FlickrLang4VisDataset",
     "",
 ]
 

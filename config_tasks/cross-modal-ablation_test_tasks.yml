@@ -1,0 +1,16 @@
+TASK19:
+  name: FlickrGrounding
+  type: V-logit
+  loss: BCEWithLogitLoss
+  process: normal
+  task_id: 18
+  dataroot: datasets/flickr30k_entities/
+  features_h5path1: datasets/flickr30k/resnet101_faster_rcnn_genome_imgfeats/volta/flickr30k_feat.lmdb
+  features_h5path2: ''
+  train_annotations_jsonpath: ''
+  val_annotations_jsonpath: ''
+  max_seq_length: 38
+  max_region_num: 36
+  batch_size: 16
+  train_split: ''
+  val_split: val

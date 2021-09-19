@@ -1,9 +1,12 @@
 # VOLTA: Visiolinguistic Transformer Architectures
 
 This is the implementation of the framework described in the paper:
-> Emanuele Bugliarello, Ryan Cotterell, Naoaki Okazaki and Desmond Elliott. [Multimodal Pretraining Unmasked: A Meta-Analysis and a Unified Framework of Vision-and-Language BERTs](https://arxiv.org/abs/2011.15124). Transactions of the Association for Computational Linguistics, 2021.
+> Emanuele Bugliarello, Ryan Cotterell, Naoaki Okazaki and Desmond Elliott. [Multimodal Pretraining Unmasked: A Meta-Analysis and a Unified Framework of Vision-and-Language BERTs](https://arxiv.org/abs/2011.15124). _Transactions of the Association for Computational Linguistics_ 2021; 9 978–994.
 
 We provide the code for reproducing our results, preprocessed data and pretrained models.
+
+## News
+- 09-2021: Added code for `cross-modal ablation` ([Frank et al., EMNLP 2021](https://arxiv.org/pdf/2109.04448.pdf)) [[Original code](https://github.com/e-bug/cross-modal-ablation)]
 
 
 ## Repository Setup
@@ -69,14 +72,16 @@ Third-party software and data sets are subject to their respective licenses. <br
 If you find our code/data/models or ideas useful in your research, please consider citing the paper:
 ```
 @article{bugliarello-etal-2021-multimodal,
-    title = "Multimodal Pretraining Unmasked: {A} Meta-Analysis and a Unified Framework of Vision-and-Language {BERT}s",
-    author = "Bugliarello, Emanuele and
-      Cotterell, Ryan and
-      Okazaki, Naoaki and
-      Elliott, Desmond",
-    journal = "Transactions of the Association for Computational Linguistics",
-    year = "2021",
-    url = "https://arxiv.org/abs/2011.15124",
+    author = {Bugliarello, Emanuele and Cotterell, Ryan and Okazaki, Naoaki and Elliott, Desmond},
+    title = "{Multimodal Pretraining Unmasked: {A} Meta-Analysis and a Unified Framework of Vision-and-Language {BERT}s}",
+    journal = {Transactions of the Association for Computational Linguistics},
+    volume = {9},
+    pages = {978-994},
+    year = {2021},
+    month = {09},
+    issn = {2307-387X},
+    doi = {10.1162/tacl_a_00408},
+    url = {https://doi.org/10.1162/tacl\_a\_00408},
 }
 ```
 
