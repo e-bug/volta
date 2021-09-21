@@ -213,12 +213,13 @@ def main():
                     bix_predictions.append(predictions_t[bix, masked_ix].numpy())
                 masked_lm_loss = loss_fct(predictions_t[bix].view(-1, config.vocab_size), lm_label_ids[bix].view(-1),).unsqueeze(0).item()
 
-                pred_tokens.append(pred_bix_tokens)
-                true_tokens.append(true_bix_tokens)
-                pred_scores.append(bix_predictions)
-                image_ids.append(image_id[bix].item())
-                phrase_ids.append(phrase_id[bix].item())
-                lm_losses.append(masked_lm_loss)
+                if args.dump_results:
+                    # pred_tokens.append(pred_bix_tokens)
+                    # true_tokens.append(true_bix_tokens)
+                    # pred_scores.append(bix_predictions)
+                    # image_ids.append(image_id[bix].item())
+                    # phrase_ids.append(phrase_id[bix].item())
+                    lm_losses.append(masked_lm_loss)
 
     if default_gpu:
         print("MLM:", np.mean(np.array(lm_losses)))

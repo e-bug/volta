@@ -202,8 +202,8 @@ def main():
                 prediction_scores_v = prediction_scores_v_dict[ix][:, :-1]
                 image_label = image_labels[:, :-1]
             else:
-                prediction_scores_v = prediction_scores_v_dict[ix][:, int(config.add_global_imgfeat != ""):]
-                image_label = image_labels[:, int(config.add_global_imgfeat != ""):]
+                prediction_scores_v = prediction_scores_v_dict[ix][:, int(config.add_global_imgfeat is not None):]
+                image_label = image_labels[:, int(config.add_global_imgfeat is not None):]
 
             target_ixs = [[] for _ in range(prediction_scores_v.size(0))]
             xs, ys = torch.where(image_label != -1)
@@ -229,19 +229,23 @@ def main():
                     masked_xe_loss = pre_vis_criterions[str(3)](prediction_scores_v[bix].unsqueeze(0), 1.0, image_label[bix].unsqueeze(0),
                                                                 image_cls[bix].unsqueeze(0), features[bix].unsqueeze(0), obj_labels[bix].unsqueeze(0),
                                                                 obj_confs[bix].unsqueeze(0), attr_labels[bix].unsqueeze(0), attr_confs[bix].unsqueeze(0))
-                pred_objs.append(pred_bix_ixs)
-                true_objs.append(true_bix_ixs)
-                pred_scores.append(bix_predictions)
-                true_scores.append(bix_labels)
-                image_ids.append(image_id[bix].item())
-                phrase_ids.append(phrase_id[bix].item())
-                img_kl_losses.append(masked_kl_loss)
-                img_xe_losses.append(masked_xe_loss)
-                masked_ixs.append(target_ixs[bix])
+                if args.dump_results:
+                    # pred_objs.append(pred_bix_ixs)
+                    # true_objs.append(true_bix_ixs)
+                    pred_scores.append(bix_predictions)
+                    # true_scores.append(bix_labels)
+                    # image_ids.append(image_id[bix].item())
+                    # phrase_ids.append(phrase_id[bix].item())
+                    img_kl_losses.append(masked_kl_loss)
+                    img_xe_losses.append(masked_xe_loss)
+                    # masked_ixs.append(target_ixs[bix])
 
     if default_gpu:
         print("Threshold: %.1f | Ablation: %s" % (args.overlap_threshold, args.masking))
-        print("MRC-KL:", np.mean(np.array(img_kl_losses)))
+        if masked_kl_loss is None:
+            print("MRC-KL: None")
+        else:
+            print("MRC-KL:", np.mean(np.array(img_kl_losses)))
         print("MRC-XE:", np.mean(np.array(img_xe_losses)))
 
         if args.dump_results:
