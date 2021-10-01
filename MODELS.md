@@ -18,6 +18,9 @@ For the latter, we distribute the weights that lead to higher average downstream
 | [VisualBERT (CTRL)](https://sid.erda.dk/share_redirect/GCBlzUuoJl) | 69.03 | 70.02    | 72.70 | 61.48        | 75.20        |
 | [UNITER (CTRL)](https://sid.erda.dk/share_redirect/FeYIWpMSFg)     | 68.67 | 71.45    | 73.73 | 60.54        | 76.40        |
 
+### Checkpoints by Random Seed
+All the models pretrained with 10 random seeds in our controlled setup can be downloaded from [here](https://sid.erda.dk/sharelink/GWj9Oh5dx4).
+
 ### Conversions of Original Models into VOLTA
 | Model             | Source |
 |-------------------|--------|
