@@ -9,7 +9,7 @@ def evaluate(preds_list, truth_dict):
         quesid = entry["questionId"]
         pred = entry["prediction"]
         label = truth_dict[quesid]["answer"]
-        if pred in label:
+        if pred == label:
             score += 1.
     return score / len(preds_list)
 
