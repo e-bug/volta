@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TASK=19
+TASK=18
 MODEL=ctrl_uniter
 MODEL_CONFIG=ctrl_uniter_base
 TASKS_CONFIG=cross-modal-ablation_test_tasks
@@ -11,7 +11,7 @@ source activate volta
 
 cd ../../../../..
 python ablate_vis4lang.py \
-        --bert_model bert-base-uncased --config_file config/${MODEL_CONFIG}.json --from_pretrained ${PRETRAINED} \
+        --config_file config/${MODEL_CONFIG}.json --from_pretrained ${PRETRAINED} \
         --tasks_config_file config_tasks/${TASKS_CONFIG}.yml --task $TASK --split val \
         --output_dir ${OUTPUT_DIR} --dump_results --masking none
 

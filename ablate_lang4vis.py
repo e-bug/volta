@@ -47,9 +47,6 @@ def parse_args():
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
-    parser.add_argument("--bert_model", default="bert-base-uncased", type=str,
-                        help="Bert pre-trained model selected in the list: bert-base-uncased, "
-                             "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
     parser.add_argument("--config_file", default="config/bert_config.json", type=str,
                         help="The config file which specified the model details.")
     # Output
@@ -66,9 +63,6 @@ def parse_args():
                         help="Text tokens to mask")
     parser.add_argument("--overlap_threshold", default=0.5, type=float,
                         help="Threshold for image regions to mask")
-    # Text
-    parser.add_argument("--do_lower_case", default=True, type=bool,
-                        help="Whether to lower case the input text. True for uncased models, False for cased models.")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
                         help="which split to use.")
@@ -146,10 +140,10 @@ def main():
         num_workers = int(num_workers / dist.get_world_size())
     logger.info("Loading %s Dataset with batch size %d" % (task_name, batch_size))
     eval_split = args.split or task_cfg[task]["val_split"]
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    tokenizer = BertTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
     dset = FlickrLang4VisDataset(
         task, task_cfg[task]["dataroot"], args.masking, eval_split, features_reader, None,
-        tokenizer, args.bert_model, max_seq_length=task_cfg[task]["max_seq_length"],
+        tokenizer, config.bert_model, max_seq_length=task_cfg[task]["max_seq_length"],
         max_region_num=task_cfg[task]["max_region_num"], num_locs=config.num_locs,
         threshold=args.overlap_threshold, add_global_imgfeat=config.add_global_imgfeat
     )
