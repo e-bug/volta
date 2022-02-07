@@ -12,6 +12,9 @@ from typing import List
 
 import numpy as np
 
+import torch
+from torch.nn import functional as F
+
 
 class ImageFeaturesH5Reader(object):
     """
@@ -62,6 +65,7 @@ class ImageFeaturesH5Reader(object):
         self.feature_size = config.v_feature_size
         self.num_locs = config.num_locs
         self.add_global_imgfeat = config.add_global_imgfeat
+        self.norm_embeddings = config.norm_embeddings
 
     def __len__(self):
         return len(self._image_ids)
@@ -138,13 +142,17 @@ class ImageFeaturesH5Reader(object):
                 image_h = int(item["img_h"])
                 image_w = int(item["img_w"])
 
-                features = np.frombuffer(base64.b64decode(item["features"]), dtype=np.float32).reshape(-1, self.feature_size)
-                boxes = np.frombuffer(base64.b64decode(item['boxes']), dtype=np.float32).reshape(-1, 4)
+                try:
+                    features = np.frombuffer(base64.b64decode(item["features"]), dtype=np.float32).reshape(-1, self.feature_size)
+                    boxes = np.frombuffer(base64.b64decode(item['boxes']), dtype=np.float32).reshape(-1, 4)
+                except:
+                    features = item["features"].reshape(-1, self.feature_size)
+                    boxes = item['boxes'].reshape(-1, 4)
 
                 image_location = np.zeros((boxes.shape[0], self.num_locs), dtype=np.float32)
                 image_location[:, :4] = boxes
-                if self.num_locs == 5:
-                    image_location[:, 4] = (
+                if self.num_locs >= 5:
+                    image_location[:, -1] = (
                             (image_location[:, 3] - image_location[:, 1])
                             * (image_location[:, 2] - image_location[:, 0])
                             / (float(image_w) * float(image_h))
@@ -155,7 +163,16 @@ class ImageFeaturesH5Reader(object):
                 image_location[:, 1] = image_location[:, 1] / float(image_h)
                 image_location[:, 2] = image_location[:, 2] / float(image_w)
                 image_location[:, 3] = image_location[:, 3] / float(image_h)
+                
+                if self.num_locs > 5:
+                    image_location[:, 4] = image_location[:, 2] - image_location[:, 0]
+                    image_location[:, 5] = image_location[:, 3] - image_location[:, 1]
 
+                if self.norm_embeddings:
+                    features = torch.FloatTensor(features.copy())
+                    features = F.normalize(features, dim=-1).numpy()
+                    image_location = image_location / np.linalg.norm(image_location, 2, 1, keepdims=True)
+                
                 num_boxes = features.shape[0]
                 if self.add_global_imgfeat == "first":
                     g_feat = np.sum(features, axis=0) / num_boxes

@@ -20,19 +20,34 @@ from volta.datasets._image_features_reader import ImageFeaturesH5Reader
 
 logger = logging.getLogger(__name__)
 
+
 LossMap = {
     "BCEWithLogitLoss": nn.BCEWithLogitsLoss(reduction="mean"),
     "CrossEntropyLoss": nn.CrossEntropyLoss(),
+    "TripletLoss": triplet_loss,
 }
+
+def triplet_loss(rank_scores, target, margin=0.2):
+    scores = torch.sigmoid(rank_scores)
+    pos = scores[:, :1]
+    neg = scores[:, 1:]
+    rank_loss = torch.clamp(margin + neg - pos, 0)
+    return rank_loss.mean()
+
+def LoadLoss(args, task_cfg, task_id):
+    task = "TASK" + task_id
+    loss_name = args.loss or task_cfg[task]["loss"]
+    loss = LossMap[loss_name]
+    return loss
 
 
 def ForwardModelsVal(config, task_cfg, device, task_id, batch, model, criterion):
     batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
 
     if task_cfg[task_id]["type"] == "V-logit-mc":
-        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id, ixs = batch
     else:
-        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id, ixs = batch
 
     batch_size = features.size(0)
     if task_cfg[task_id]["process"] in ["dialog"]:
@@ -87,8 +102,9 @@ def ForwardModelsVal(config, task_cfg, device, task_id, batch, model, criterion)
         segment_ids = segment_ids.repeat(1, 2)
         segment_ids = segment_ids.view(batch_size * 2, int(segment_ids.size(1) / 2))
 
-    vil_prediction, vision_prediction, linguisic_prediction, _ = model(question, features, spatials, task_id,
-                                                                       segment_ids, input_mask, image_mask)
+    with torch.no_grad():
+        vil_prediction, vision_prediction, linguisic_prediction, _ = model(question, features, spatials, task_id,
+                                                                           segment_ids, input_mask, image_mask)
 
     if task_cfg[task_id]["type"] == "VL-classifier":
         loss = criterion(vil_prediction, target)
@@ -140,9 +156,9 @@ def ForwardModelsTrain(config, task_cfg, device, task_id, batch, model, criterio
     batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
 
     if task_cfg[task_id]["type"] == "V-logit-mc":
-        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id, ixs = batch
     else:
-        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id, ixs = batch
 
     batch_size = features.size(0)
     if task_cfg[task_id]["process"] in ["dialog"]:
@@ -280,89 +296,145 @@ def ForwardModelsTrain(config, task_cfg, device, task_id, batch, model, criterio
     return loss, batch_score
 
 
-def LoadLoss(task_cfg, task_id):
-    task = "TASK" + task_id
-    loss = LossMap[task_cfg[task]["loss"]]
-    return loss
-
-
 def LoadDataset(args, config, task_cfg, task_id, split="trainval"):
     tokenizer = AutoTokenizer.from_pretrained(config.bert_model, do_lower_case=config.do_lower_case)
 
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]
 
-    # initialize the feature reader
-    feats_h5path1 = task_cfg[task]["features_h5path1"]
-    feats_h5path2 = task_cfg[task]["features_h5path2"]
-    features_reader1 = ImageFeaturesH5Reader(feats_h5path1, config, args.in_memory) if feats_h5path1 != "" else None
-    features_reader2 = ImageFeaturesH5Reader(feats_h5path2, config, args.in_memory) if feats_h5path2 != "" else None
-
-    batch_size = task_cfg[task]["batch_size"] // args.grad_acc_steps
+    batch_size = args.batch_size or task_cfg[task]["batch_size"] 
+    batch_size //= args.grad_acc_steps
     num_workers = args.num_workers
+    num_val_workers = args.num_val_workers
+    cache = args.cache or 5000
     if args.local_rank != -1:
         batch_size = int(batch_size / dist.get_world_size())
         num_workers = int(num_workers / dist.get_world_size())
+        num_val_workers = int(num_val_workers / dist.get_world_size())
+        cache = int(cache / dist.get_world_size())
 
     logger.info("Loading %s Dataset with batch size %d" % (task_name, batch_size))
-    dset_train, dset_train, task2num_iters = None, None, {}
-    if "train" in split:
-        dset_train = DatasetMapTrain[task_name](
-            task=task_cfg[task]["name"],
-            dataroot=task_cfg[task]["dataroot"],
-            annotations_jsonpath=task_cfg[task]["train_annotations_jsonpath"],
-            split=task_cfg[task]["train_split"],
-            image_features_reader=features_reader1,
-            gt_image_features_reader=features_reader2,
-            tokenizer=tokenizer,
-            bert_model=config.bert_model,
-            padding_index=0,
-            max_seq_length=task_cfg[task]["max_seq_length"],
-            max_region_num=task_cfg[task]["max_region_num"],
-            num_locs=config.num_locs,
-            add_global_imgfeat=config.add_global_imgfeat,
-            append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
-        )
-        if args.local_rank == -1:
-            train_sampler = RandomSampler(dset_train)
-        else:
-            train_sampler = DistributedSampler(dset_train)
-        dl_train = DataLoader(
-            dset_train,
-            sampler=train_sampler,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True,
-            drop_last=args.drop_last,
-        )
-        task2num_iters = {task: len(dl_train)}
+    from volta.datasets import DatasetMapTrain
+    
+    train_annotations_jsonpath = args.train_annotations_jsonpath or task_cfg[task]["train_annotations_jsonpath"]
+    val_annotations_jsonpath = args.val_annotations_jsonpath or task_cfg[task]["val_annotations_jsonpath"]
 
+    # initialize the feature reader
+    feats_h5path1 = task_cfg[task]["features_h5path1"]
+    feats_h5path2 = task_cfg[task]["features_h5path2"]
+
+    data_format = task_cfg[task]["format"]
+    dset_train, dl_train, task2num_iters = None, None, {}
     dset_val, dl_val = None, None
-    if "val" in split:
-        dset_val = DatasetMapTrain[task_name](
-            task=task_cfg[task]["name"],
-            dataroot=task_cfg[task]["dataroot"],
-            annotations_jsonpath=task_cfg[task]["val_annotations_jsonpath"],
-            split=task_cfg[task]["val_split"],
-            image_features_reader=features_reader1,
-            gt_image_features_reader=features_reader2,
-            tokenizer=tokenizer,
-            bert_model=config.bert_model,
-            padding_index=0,
-            max_seq_length=task_cfg[task]["max_seq_length"],
-            max_region_num=task_cfg[task]["max_region_num"],
-            num_locs=config.num_locs,
-            add_global_imgfeat=config.add_global_imgfeat,
-            append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
-        )
-        dl_val = DataLoader(
-            dset_val,
-            shuffle=False,
-            batch_size=batch_size,
-            num_workers=2,
-            pin_memory=True,
-            drop_last=args.drop_last,
-        )
+    if data_format == "serialized_lmdb":
+        if "train" in split:
+            dl_train = DatasetMapTrain[task_name+"Loader"](
+                task=task_cfg[task]["name"],
+                dataroot=task_cfg[task]["dataroot"],
+                annotations_jsonpath=train_annotations_jsonpath,
+                split=args.train_split or task_cfg[task]["train_split"],
+                image_features_reader=feats_h5path1,
+                gt_image_features_reader=None,
+                tokenizer=tokenizer,
+                bert_model=config.bert_model,
+                padding_index=tokenizer.pad_token_id,
+                max_seq_length=task_cfg[task]["max_seq_length"],
+                max_region_num=task_cfg[task]["max_region_num"],
+                num_locs=config.num_locs,
+                add_global_imgfeat=config.add_global_imgfeat,
+                append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
+                norm_embeddings=config.norm_embeddings,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                cache=cache,
+            )
+            task2num_iters = {task: len(dl_train)}
+        if "val" in split:
+            dl_val = DatasetMapTrain[task_name+"Loader"](
+                task=task_cfg[task]["name"],
+                dataroot=task_cfg[task]["dataroot"],
+                annotations_jsonpath=val_annotations_jsonpath,
+                split=args.val_split or task_cfg[task]["val_split"],
+                image_features_reader=feats_h5path2,
+                gt_image_features_reader=None,
+                tokenizer=tokenizer,
+                bert_model=config.bert_model,
+                padding_index=tokenizer.pad_token_id,
+                max_seq_length=task_cfg[task]["max_seq_length"],
+                max_region_num=task_cfg[task]["max_region_num"],
+                num_locs=config.num_locs,
+                add_global_imgfeat=config.add_global_imgfeat,
+                append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
+                norm_embeddings=config.norm_embeddings,
+                batch_size=batch_size,
+                num_workers=num_val_workers,
+                cache=cache,
+            )
+
+    else:
+        features_reader1 = ImageFeaturesH5Reader(feats_h5path1, config, args.in_memory) if feats_h5path1 != "" else None
+        features_reader2 = ImageFeaturesH5Reader(feats_h5path2, config, args.in_memory) if feats_h5path2 != "" else None
+        if "train" in split:
+            if args.train_features_lmdbpath:
+                features_reader = ImageFeaturesH5Reader(args.train_features_lmdbpath, config, args.in_memory)
+            else:
+                features_reader = None
+            dset_train = DatasetMapTrain[task_name](
+                task=task_cfg[task]["name"],
+                dataroot=task_cfg[task]["dataroot"],
+                annotations_jsonpath=train_annotations_jsonpath,
+                split=args.train_split or task_cfg[task]["train_split"],
+                image_features_reader=features_reader or features_reader1,
+                gt_image_features_reader=features_reader2,
+                tokenizer=tokenizer,
+                bert_model=config.bert_model,
+                padding_index=tokenizer.pad_token_id,
+                max_seq_length=task_cfg[task]["max_seq_length"],
+                max_region_num=task_cfg[task]["max_region_num"],
+                num_locs=config.num_locs,
+                add_global_imgfeat=config.add_global_imgfeat,
+                append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
+            )
+            if args.local_rank == -1:
+                train_sampler = RandomSampler(dset_train)
+            else:
+                train_sampler = DistributedSampler(dset_train)
+            dl_train = DataLoader(
+                dset_train,
+                sampler=train_sampler,
+                batch_size=batch_size,
+                num_workers=num_workers,
+                pin_memory=True,
+                drop_last=args.drop_last,
+            )
+            task2num_iters = {task: len(dl_train)}
+
+        if "val" in split:
+            eval_batch_size = args.eval_batch_size or task_cfg[task].get("eval_batch_size", batch_size)
+            dset_val = DatasetMapTrain[task_name](
+                task=task_cfg[task]["name"],
+                dataroot=task_cfg[task]["dataroot"],
+                annotations_jsonpath=val_annotations_jsonpath,
+                split=args.val_split or task_cfg[task]["val_split"],
+                image_features_reader=features_reader1,
+                gt_image_features_reader=features_reader2,
+                tokenizer=tokenizer,
+                bert_model=config.bert_model,
+                padding_index=tokenizer.pad_token_id,
+                max_seq_length=task_cfg[task]["max_seq_length"],
+                max_region_num=task_cfg[task]["max_region_num"],
+                num_locs=config.num_locs,
+                add_global_imgfeat=config.add_global_imgfeat,
+                append_mask_sep=(config.fusion_method == 'vl-bert_vqa'),
+            )
+            dl_val = DataLoader(
+                dset_val,
+                shuffle=False,
+                batch_size=eval_batch_size,
+                num_workers=num_val_workers,
+                pin_memory=True,
+                drop_last=args.drop_last,
+            )
 
     return batch_size, task2num_iters, dset_train, dset_val, dl_train, dl_val
 
@@ -374,7 +446,7 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
     task_name = task_cfg[task]["name"]
 
     # initialize the feature reader
-    feats_h5path1 = task_cfg[task]["features_h5path1"]
+    feats_h5path1 = args.val_features_lmdbpath or task_cfg[task]["features_h5path1"]
     feats_h5path2 = task_cfg[task]["features_h5path2"]
     features_reader1 = ImageFeaturesH5Reader(feats_h5path1, config, args.in_memory) if feats_h5path1 != "" else None
     features_reader2 = ImageFeaturesH5Reader(feats_h5path2, config, args.in_memory) if feats_h5path2 != "" else None
@@ -384,6 +456,7 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
         batch_size = int(batch_size / dist.get_world_size())
 
     logger.info("Loading %s Dataset with batch size %d" % (task_name, batch_size))
+    from volta.datasets import DatasetMapEval
     if args.split:
         eval_split = args.split
     else:
@@ -393,13 +466,13 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
         dset_val = DatasetMapEval[task_name](
             task=task_cfg[task]["name"],
             dataroot=task_cfg[task]["dataroot"],
-            annotations_jsonpath=task_cfg[task]["val_annotations_jsonpath"],
+            annotations_jsonpath=val_annotations_jsonpath,
             split=eval_split,
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
             bert_model=config.bert_model,
-            padding_index=0,
+            padding_index=tokenizer.pad_token_id,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],
             num_locs=config.num_locs,
@@ -411,13 +484,13 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
         dset_val = DatasetMapEval[task_name](
             task=task_cfg[task]["name"],
             dataroot=task_cfg[task]["dataroot"],
-            annotations_jsonpath=task_cfg[task]["val_annotations_jsonpath"],
+            annotations_jsonpath=val_annotations_jsonpath,
             split=eval_split,
             image_features_reader=features_reader1,
             gt_image_features_reader=features_reader2,
             tokenizer=tokenizer,
             bert_model=config.bert_model,
-            padding_index=0,
+            padding_index=tokenizer.pad_token_id,
             max_seq_length=task_cfg[task]["max_seq_length"],
             max_region_num=task_cfg[task]["max_region_num"],
             num_locs=config.num_locs,
@@ -429,7 +502,7 @@ def LoadDatasetEval(args, config, task_cfg, task_id):
         dset_val,
         shuffle=False,
         batch_size=batch_size,
-        num_workers=10,
+        num_workers=args.num_val_workers,
         pin_memory=True,
         drop_last=args.drop_last,
     )
@@ -450,9 +523,9 @@ def EvaluatingModel(config, task_cfg, device, task_id, batch, model, dataloader,
     batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
 
     if task_cfg[task_id]["type"] == "V-logit-mc":
-        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, multi_choice_ids, question_id, ixs = batch
     else:
-        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id = batch
+        features, spatials, image_mask, question, target, input_mask, segment_ids, question_id, ixs = batch
 
     batch_size = features.size(0)
 
@@ -621,6 +694,17 @@ def EvaluatingModel(config, task_cfg, device, task_id, batch, model, dataloader,
         loss = criterion(vil_prediction, target)
         loss = loss.mean()
         batch_score = compute_score_with_logits(vil_prediction, target).sum()
+
+        preds = torch.max(vil_prediction, 1)[1].data  # argmax
+        labels = torch.max(target, 1)[1].data
+        for i in range(preds.size(0)):
+            results.append(
+                {
+                    "sentence": dataloader.dataset.entries[question_id[i].item()]["sentence"],
+                    "prediction": preds[i].item(),
+                    "label": labels[i].item(),
+                }
+            )
 
     elif task_cfg[task_id]["type"] == "VL-tri-classifier":
         loss = criterion(vil_prediction, target)

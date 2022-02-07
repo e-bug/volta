@@ -107,7 +107,7 @@ class tbLogger(object):
         self.task_step_val[task_id] += self.gradient_accumulation_steps
         self.task_datasize_val[task_id] += batch_size
 
-    def step_val_CC(self, epochId, masked_loss_t, masked_loss_v, next_sentence_loss, task_id, batch_size, split):
+    def step_val_CC(self, iter_id, masked_loss_t, masked_loss_v, next_sentence_loss, task_id, batch_size, split):
         self.masked_t_loss_val[task_id] += masked_loss_t
         self.masked_v_loss_val[task_id] += masked_loss_v
         self.next_sentense_loss_val[task_id] += next_sentence_loss
@@ -116,9 +116,9 @@ class tbLogger(object):
         self.task_datasize_val[task_id] += batch_size
         
         # plot on tensorboard.
-        self.linePlot(stepId, masked_loss_t, split, self.task_id2name[task_id] + "_masked_loss_t")
-        self.linePlot(stepId, masked_loss_v, split, self.task_id2name[task_id] + "_masked_loss_v")
-        self.linePlot(stepId, next_sentence_loss, split, self.task_id2name[task_id] + "_next_sentence_loss")
+        self.linePlot(iter_id, masked_loss_t, split, self.task_id2name[task_id] + "_masked_loss_t")
+        self.linePlot(iter_id, masked_loss_v, split, self.task_id2name[task_id] + "_masked_loss_v")
+        self.linePlot(iter_id, next_sentence_loss, split, self.task_id2name[task_id] + "_next_sentence_loss")
 
     def showLossValAll(self):
         progressInfo = "Eval Ep: %d " % self.epochId
@@ -275,18 +275,18 @@ def summary_parameters(model, logger=None):
     :return: None
     """
 
-    print_and_log('>> Trainable Parameters:', logger)
-    trainable_paramters = [(str(n), str(v.dtype), str(tuple(v.shape)), str(v.numel()))
-                           for n, v in model.named_parameters() if v.requires_grad]
-    max_lens = [max([len(item) + 4 for item in col]) for col in zip(*trainable_paramters)]
+    print_and_log('>> Parameters:', logger)
+    parameters = [(str(n), str(v.dtype), str(tuple(v.shape)), str(v.numel()), str(v.requires_grad))
+                           for n, v in model.named_parameters()]
+    max_lens = [max([len(item) + 4 for item in col]) for col in zip(*parameters)]
     raw_format = '|' + '|'.join(['{{:{}s}}'.format(max_len) for max_len in max_lens]) + '|'
     raw_split = '-' * (sum(max_lens) + len(max_lens) + 1)
     print_and_log(raw_split, logger)
-    print_and_log(raw_format.format('Name', 'Dtype', 'Shape', '#Params'), logger)
+    print_and_log(raw_format.format('Name', 'Dtype', 'Shape', '#Params', 'Trainable'), logger)
     print_and_log(raw_split, logger)
 
-    for name, dtype, shape, number in trainable_paramters:
-        print_and_log(raw_format.format(name, dtype, shape, number), logger)
+    for name, dtype, shape, number, grad in parameters:
+        print_and_log(raw_format.format(name, dtype, shape, number, grad), logger)
         print_and_log(raw_split, logger)
 
     num_trainable_params = sum([v.numel() for v in model.parameters() if v.requires_grad])

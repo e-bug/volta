@@ -20,10 +20,11 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 
-from volta.config import BertConfig
-from volta.encoders import BertForVLTasks, BertForVLPreTraining
+from volta.config import BertConfig, M3PConfig
+from volta.encoders import BertForVLPreTraining, BertForVLTasks, M3PForVLTasks
 from volta.task_utils import LoadDatasetEval
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -42,6 +43,8 @@ def parse_args():
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
     parser.add_argument("--config_file", default="config/bert_config.json", type=str,
                         help="The config file which specified the model details.")
+    parser.add_argument("--is_m3p", action='store_true', default=False,
+                        help="Use M3P.")
     # Output
     parser.add_argument("--output_dir", default="results", type=str,
                         help="The output directory where the model checkpoints will be written.")
@@ -52,12 +55,11 @@ def parse_args():
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
-    parser.add_argument("--num_images", default=1000, type=int,
-                        help="Number of images.")
-    parser.add_argument("--captions_per_image", default=5, type=int,
-                        help="Number of captions per image.")
-    parser.add_argument("--num_subiters", default=2, type=int,
-                        help="Number of sub-batches to evaluate each caption.")
+    parser.add_argument("--val_annotations_jsonpath", default="", type=str)
+    parser.add_argument("--val_features_lmdbpath", default="", type=str)
+    parser.add_argument("--num_subiters", default=2, type=int)
+    parser.add_argument("--caps_per_image", default=5, type=int,
+                        help="Num captions per image")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
                         help="which split to use.")
@@ -75,6 +77,7 @@ def parse_args():
                         help="local_rank for distributed training on gpus")
     parser.add_argument("--num_workers", type=int, default=16,
                         help="Number of workers in the dataloader.")
+    parser.add_argument("--num_val_workers", type=int, default=10)
     parser.add_argument("--in_memory", default=False, type=bool,
                         help="whether use chunck for parallel training.")
     parser.add_argument("--use_chunk", default=0, type=float,
@@ -105,7 +108,10 @@ def main():
     logger.info(f"device: {device} n_gpu: {n_gpu}, distributed training: {bool(args.local_rank != -1)}")
 
     # Load config
-    config = BertConfig.from_json_file(args.config_file)
+    if args.is_m3p:
+        config = M3PConfig.from_json_file(args.config_file)
+    else:
+        config = BertConfig.from_json_file(args.config_file)
 
     # Load task config
     with open(args.tasks_config_file, "r") as f:
@@ -129,14 +135,16 @@ def main():
 
     # Dataset
     batch_size, task2num_iters, dset_val, dl_val = LoadDatasetEval(args, config, task_cfg, args.task)
-    max_subiter_images = dset_val.max_num_images
-
+    
     # Model
     if args.zero_shot:
-        config.visual_target_weights = {}
+        config.visual_target_weights = {}  # [0, 0, 0, 0, 0, 0, 0]
         model = BertForVLPreTraining.from_pretrained(args.from_pretrained, config=config)
     else:
-        model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+        if args.is_m3p:
+            model = M3PForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+        else:
+            model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
 
     # Move to GPU(s)
     model.to(device)
@@ -162,9 +170,9 @@ def main():
     model.eval()
     results = []
     others = []
-    score_matrix = np.zeros((args.num_images * args.captions_per_image, args.num_images))
-    target_matrix = np.zeros((args.num_images * args.captions_per_image, args.num_images))
-    rank_vector = np.ones(args.num_images * args.captions_per_image) * args.num_images
+    score_matrix = np.zeros((dset_val.num_entries, dset_val.num_images))
+    target_matrix = np.zeros((dset_val.num_entries, dset_val.num_images))
+    rank_vector = np.ones(dset_val.num_entries) * dset_val.num_images
     count = 0
     for i, batch in tqdm(enumerate(dl_val), total=task2num_iters[task]):
         batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch)
@@ -177,28 +185,29 @@ def main():
         segment_ids = segment_ids.repeat(features.size(0), 1)
         input_mask = input_mask.repeat(features.size(0), 1)
 
+        target = target.view(-1).float().cpu().numpy()
         with torch.no_grad():
             if args.zero_shot:
-                _, _, vil_logit, _, _, _ = model(question, features, spatials, segment_ids, input_mask, image_mask)
+                _, _, vil_logit, _, _ = model(question, features, spatials, segment_ids, input_mask, image_mask)
 
                 score_matrix[
-                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
+                    caption_idx, image_idx * dset_val.max_num_images: image_idx * dset_val.max_num_images + len(target)
                 ] = (torch.softmax(vil_logit, dim=1)[:, 0].view(-1).cpu().numpy())
                 target_matrix[
-                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
-                ] = (target.view(-1).float().cpu().numpy())
+                    caption_idx, image_idx * dset_val.max_num_images: image_idx * dset_val.max_num_images + len(target)
+                ] = (target)
 
             else:
                 vil_logit, _, _, _ = model(question, features, spatials, task, segment_ids, input_mask, image_mask)
 
                 score_matrix[
-                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
+                    caption_idx, image_idx * dset_val.max_num_images: image_idx * dset_val.max_num_images + len(target)
                 ] = (vil_logit.view(-1).cpu().numpy())
                 target_matrix[
-                    caption_idx, image_idx * max_subiter_images: (image_idx + 1) * max_subiter_images
-                ] = (target.view(-1).float().cpu().numpy())
+                    caption_idx, image_idx * dset_val.max_num_images: image_idx * dset_val.max_num_images + len(target)
+                ] = (target)
 
-            if image_idx.item() == args.num_subiters - 1:
+            if image_idx.item() == (args.num_subiters - 1):
                 rank = np.where(
                     (
                         np.argsort(-score_matrix[caption_idx])

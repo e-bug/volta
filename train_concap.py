@@ -25,6 +25,7 @@ from volta.encoders import BertForVLPreTraining
 from volta.datasets import ConceptCapLoaderTrain, ConceptCapLoaderVal
 from volta.train_utils import freeze_layers, tbLogger, summary_parameters, save, resume
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -65,7 +66,7 @@ def parse_args():
     parser.add_argument("--learning_rate", default=1e-4, type=float,
                         help="The initial learning rate for Adam.")
     parser.add_argument("--gradient_accumulation_steps", dest="grad_acc_steps", type=int, default=1,
-                        help="Number of updates steps to accumualte before performing a backward/update pass.")
+                        help="Number of updates steps to accumulate before performing a backward/update pass.")
     parser.add_argument("--num_train_epochs", default=10.0, type=float,
                         help="Total number of training epochs to perform.")
     # Scheduler
@@ -271,8 +272,8 @@ def main():
             batch = tuple(t.cuda(device=device, non_blocking=True) for t in batch[:-1])
 
             input_ids, input_mask, segment_ids, lm_label_ids, is_match, \
-            image_feat, image_loc, image_cls, obj_labels, obj_confs, \
-            attr_labels, attr_confs, image_attrs, image_label, image_mask = batch
+                image_feat, image_loc, image_cls, obj_labels, obj_confs, \
+                attr_labels, attr_confs, image_attrs, image_label, image_mask = batch
 
             if args.objective == 1:
                 # Ignore labels (setting them to -1) for mismatched caption-image pairs

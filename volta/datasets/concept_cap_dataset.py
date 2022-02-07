@@ -442,8 +442,8 @@ class BertPreprocessBatch(object):
         attr_labels = attr_labels[:num_boxes]
         attr_confs = attr_confs[:num_boxes]
 
-        if self.num_locs == 5:
-            image_location[:, 4] = (
+        if self.num_locs >= 5:
+            image_location[:, -1] = (
                 (image_location[:, 3] - image_location[:, 1])
                 * (image_location[:, 2] - image_location[:, 0])
                 / (float(image_w) * float(image_h))
@@ -454,6 +454,10 @@ class BertPreprocessBatch(object):
         image_location[:, 1] = image_location[:, 1] / float(image_h)
         image_location[:, 2] = image_location[:, 2] / float(image_w)
         image_location[:, 3] = image_location[:, 3] / float(image_h)
+
+        if self.num_locs > 5:
+            image_location[:, 4] = image_location[:, 2] - image_location[:, 0]
+            image_location[:, 5] = image_location[:, 3] - image_location[:, 1]
 
         caption, label = self.random_cap(caption)
         tokens_caption = self.tokenizer.encode(caption, add_special_tokens=False)

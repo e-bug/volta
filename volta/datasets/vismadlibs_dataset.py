@@ -112,8 +112,8 @@ class VMMultipleChoiceDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (max_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), max_length)
             entry["q_token"] = tokens
@@ -161,7 +161,7 @@ class VMMultipleChoiceDataset(Dataset):
         if labels is not None:
             target.scatter_(0, labels, scores)
 
-        return features, spatials, question, target, input_mask, segment_ids
+        return features, spatials, question, target, input_mask, segment_ids, index
 
     def __len__(self):
         return len(self.entries)

@@ -89,38 +89,20 @@ class Visual7wPointingDataset(Dataset):
         self.entries = self._load_annotations(clean_datasets)
 
         self.max_region_num = max_region_num
-        clean_train = "_cleaned" if clean_datasets else ""
-
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
+        
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -210,8 +192,8 @@ class Visual7wPointingDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (self._max_seq_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), self._max_seq_length)
             entry["token"] = tokens
@@ -309,6 +291,7 @@ class Visual7wPointingDataset(Dataset):
             multiple_choice_idx,
             co_attention_mask,
             image_id,
+            index
         )
 
     def __len__(self):

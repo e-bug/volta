@@ -166,35 +166,19 @@ class VCRDataset(Dataset):
                 if row[1] != "name":
                     self._names.append(row[1])
 
-        # cache file path data/cache/train_ques
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + "_vcr_fn.pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + "_vcr_fn.pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -256,7 +240,7 @@ class VCRDataset(Dataset):
                 input_mask = [1] * len(input_ids)
                 # Zero-pad up to the sequence length.
                 while len(input_ids) < self._max_caption_length:
-                    input_ids.append(0)
+                    input_ids.append(self._padding_index)
                     input_mask.append(0)
                     segment_ids.append(0)
                     # co_attention_mask.append(-1)
@@ -435,6 +419,7 @@ class VCRDataset(Dataset):
             segment_ids,
             co_attention_mask,
             anno_id,
+            index
         )
 
     def __len__(self):

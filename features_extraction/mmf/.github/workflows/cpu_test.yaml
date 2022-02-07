@@ -1,0 +1,88 @@
+name: CPU Tests
+
+# This workflow is triggered on pushes to the repository or external PRs.
+on: [push, pull_request]
+
+jobs:
+  unittest:
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != 'facebookresearch/mmf'
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+    - name: Checkout branch 🛎️
+      uses: actions/checkout@v2
+
+    - name: Setup Conda Environment
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: mmf
+        python-version: ${{ matrix.python-version }}
+        auto-update-conda: true
+        use-only-tar-bz2: true
+
+    - name: Cache Conda Environment
+      uses: actions/cache@v2
+      env:
+        # Increase this value to reset cache if nothing has not changed but you still
+        # want to invalidate the cache
+        CACHE_NUMBER: 0
+      with:
+        path: |
+          /usr/share/miniconda/envs/
+          /usr/local/miniconda/envs/
+          C:\Miniconda\envs\
+        key: mmf-cpu-${{ matrix.platform }}-python${{ matrix.python-version }}-${{ env.CACHE_NUMBER }}-${{ hashFiles('**/requirements.txt') }}-${{ hashFiles('**/setup.py') }}
+
+    - name: Install Windows Dependencies
+      shell: bash -l {0}
+      if: matrix.platform == 'windows-latest'
+      run: |
+        conda activate mmf
+        python -m pip install --upgrade pip
+        pip install --upgrade setuptools certifi
+        pip install --progress-bar off torch torchvision torchaudio
+        pip install --progress-bar off scipy==1.4.1 pybind11==2.5.0 pywin32==225
+        python -c 'import torch; print("Torch version:", torch.__version__)'
+        python -m torch.utils.collect_env
+
+    - name: Install Dependencies
+      shell: bash -l {0}
+      run: |
+        conda activate mmf
+        python -m pip install --upgrade pip
+        pip install --upgrade setuptools
+        pip install --progress-bar off pytest
+        pip install -r requirements.txt
+        python -c 'import torch; print("Torch version:", torch.__version__)'
+        python -m torch.utils.collect_env
+
+    - name: Install Repository
+      shell: bash -l {0}
+      run: |
+        conda activate mmf
+        python setup.py clean --all
+        python setup.py install
+
+    - name: Run Unittests
+      shell: bash -l {0}
+      run: |
+        conda activate mmf
+        cd tests
+        pytest --junitxml=artifacts/junit-${{ matrix.platform }}-python${{ matrix.python-version }}.xml -v .
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v1
+      with:
+        name: pytest-results-${{ matrix.platform }}-python${{ matrix.python-version }}
+        path: tests/artifacts/junit-${{ matrix.platform }}-python${{ matrix.python-version }}.xml
+      # Use always() to always run this step to publish test results when there are test failures
+      if: ${{ always() }}

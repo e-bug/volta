@@ -81,28 +81,19 @@ class VisDialDataset(Dataset):
         self.CLS = self._tokenizer.convert_tokens_to_ids(["[CLS]"])[0]
         self.SEP = self._tokenizer.convert_tokens_to_ids(["[SEP]"])[0]
 
-        clean_train = "_cleaned" if clean_datasets else ""
-
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + clean_train
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task + "_" + split + "_" + str(max_seq_length) + clean_train + ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self._entries, questions, answers, captions = _load_dataset(
@@ -265,7 +256,7 @@ class VisDialDataset(Dataset):
                 input_mask = [1] * (len(tokens))
                 # Zero-pad up to the sequence length.
                 while len(tokens) < self._total_seq_length:
-                    tokens.append(0)
+                    tokens.append(self._padding_index)
                     input_mask.append(0)
                     segment_ids.append(0)
 
@@ -294,6 +285,7 @@ class VisDialDataset(Dataset):
             segment_ids,
             co_attention_mask,
             image_id,
+            index
         )
 
     def __len__(self):

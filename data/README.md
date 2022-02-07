@@ -16,6 +16,13 @@ and preprocessing scripts to replicate our setup.
 - [SNLI-VE](https://sid.erda.dk/sharelink/g23Gqj9cad)
 - [VQAv2](https://sid.erda.dk/sharelink/gzyTWulKAa)
 
+More recent (from [IGLUE](https://github.com/e-bug/iglue)) and with more backbones:
+- [Flickr30K](https://sid.erda.dk/sharelink/aW8MWVSlK1)
+- [GQA](https://sid.erda.dk/sharelink/FtoWxwitOz)
+- [MaRVL zero-shot](https://sid.erda.dk/sharelink/GYPEryxpVk) | [MaRVL few-shot](https://sid.erda.dk/sharelink/fMNmRmJgQA)
+- [NLVR2](https://sid.erda.dk/sharelink/FjJUsFbRWO)
+- [xFlickr&CO](https://sid.erda.dk/sharelink/cCObmVenjI)
+- [WIT](https://sid.erda.dk/sharelink/escPrWm3Tt)
 
 ## Preprocessing Steps
 

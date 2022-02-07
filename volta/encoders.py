@@ -17,7 +17,7 @@ from .embeddings import *
 from .config import BertConfig
 from .utils import PreTrainedModel
 from .losses import pre_vis_criterions, pre_vis_targets
-
+from .m3p_transformer import M3PTransformerModel
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +375,7 @@ class BertGatedSelfOutput(nn.Module):
         if self.has_language:
             self.dense = nn.Linear(hidden_size, config.hidden_size)
             self.dropout = nn.Dropout(config.hidden_dropout_prob)
-            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         else:
             self.dense = lambda x: x
             self.dropout = lambda x: x
@@ -389,7 +389,7 @@ class BertGatedSelfOutput(nn.Module):
         elif self.has_vision:
             self.v_dense = nn.Linear(v_hidden_size, config.v_hidden_size)
             self.v_dropout = nn.Dropout(config.v_hidden_dropout_prob)
-            self.v_LayerNorm = BertLayerNorm(v_hidden_size, eps=1e-12)
+            self.v_LayerNorm = BertLayerNorm(v_hidden_size, eps=config.layer_norm_eps)
         else:
             self.v_dense = lambda x: x
             self.v_dropout = lambda x: x
@@ -517,7 +517,7 @@ class BertGatedOutput(nn.Module):
         if self.has_language:
             self.dense = nn.Linear(intermediate_size, config.hidden_size)
             self.dropout = nn.Dropout(config.hidden_dropout_prob)
-            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+            self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         else:
             self.dense = lambda x: x
             self.dropout = lambda x: x
@@ -532,7 +532,7 @@ class BertGatedOutput(nn.Module):
         elif self.has_vision:
             self.v_dense = nn.Linear(v_intermediate_size, config.v_hidden_size)
             self.v_dropout = nn.Dropout(config.v_hidden_dropout_prob)
-            self.v_LayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
+            self.v_LayerNorm = BertLayerNorm(config.v_hidden_size, eps=config.layer_norm_eps)
         else:
             self.v_dense = lambda x: x
             self.v_dropout = lambda x: x
@@ -597,7 +597,7 @@ class BertTextPooler(nn.Module):
     def __init__(self, config):
         super(BertTextPooler, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.pooler_size)
-        self.activation = nn.ReLU()
+        self.activation = nn.ReLU() if config.fusion_act == "relu" else nn.Tanh()
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding to the first token.
@@ -611,7 +611,7 @@ class VLBertTextPooler(nn.Module):
     def __init__(self, config):
         super(VLBertTextPooler, self).__init__()
         self.dense = nn.Linear(config.hidden_size, config.pooler_size)
-        self.activation = nn.ReLU()
+        self.activation = nn.ReLU() if config.fusion_act == "relu" else nn.Tanh()
 
     def forward(self, hidden_states, text_end):
         # We "pool" the model by simply taking the hidden state corresponding to the first token.
@@ -627,7 +627,7 @@ class BertImagePooler(nn.Module):
     def __init__(self, config):
         super(BertImagePooler, self).__init__()
         self.dense = nn.Linear(config.v_hidden_size, config.v_pooler_size)
-        self.activation = nn.ReLU()
+        self.activation = nn.ReLU() if config.fusion_act == "relu" else nn.Tanh()
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding to the first token.
@@ -648,7 +648,7 @@ class BertPredictionHeadTransform(nn.Module):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:
             self.transform_act_fn = config.hidden_act
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
     def forward(self, hidden_states):
         hidden_states = self.dense(hidden_states)
@@ -666,7 +666,7 @@ class BertImgPredictionHeadTransform(nn.Module):
         else:
             self.transform_act_fn = config.v_hidden_act
         if config.image_head_ln:
-            self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
+            self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=config.layer_norm_eps)
         else:
             self.LayerNorm = lambda x: x
 
@@ -759,7 +759,7 @@ class BertPreTrainingHeads(nn.Module):
         if config.fusion_method in {"none", "vl-bert_vqa"}:
             self.bi_seq_relationship = lambda x: None
         else:
-            self.bi_seq_relationship = nn.Linear(config.pooler_size, 2)
+            self.bi_seq_relationship = nn.Linear(config.pooler_size, config.itm_dim)
         self.imagePredictions = BertImagePredictionHead(config)
         if config.qa_task_weight:
             self.qaPredictions = LxmertAnswerHead(config)
@@ -805,13 +805,13 @@ class BertPreTrainingHeads(nn.Module):
 
 
 class SimpleClassifier(nn.Module):
-    def __init__(self, in_dim, hid_dim, out_dim, dropout_prob=0.0):
+    def __init__(self, in_dim, hid_dim, out_dim, layer_norm_eps=1e-12, dropout_prob=0.0):
         super().__init__()
 
         self.logit_fc = nn.Sequential(
             nn.Linear(in_dim, hid_dim),
             GeLU(),
-            BertLayerNorm(hid_dim, eps=1e-12),
+            BertLayerNorm(hid_dim, eps=layer_norm_eps),
             nn.Linear(hid_dim, out_dim),
         )
 
@@ -1040,6 +1040,27 @@ class BertModel(BertPreTrainedModel):
         return encoded_layers_t, encoded_layers_v, pooled_output_t, pooled_output_v, all_attention_mask
 
 
+class M3PModel(BertPreTrainedModel):
+    def __init__(self, config):
+        super(M3PModel, self).__init__(config)
+
+        self.encoder = M3PTransformerModel(config, is_encoder=True, with_output=False, is_crossModal=True) # params, is_encoder, with_output, is_crossModal=False
+        self.pooler = self.encoder.pooled_layer
+
+        self.apply(self.init_weights)
+
+    def forward(self, input_txt, input_imgs, image_loc, token_type_ids=None, attention_mask=None,
+                image_attention_mask=None, output_all_encoded_layers=False, output_all_attention_masks=False):
+
+        txt_lens = attention_mask.sum(dim=1)
+        img_lens = image_attention_mask.sum(dim=1)
+
+        sequence_output = self.encoder.jointfwd(input_txt, txt_lens, input_imgs, img_lens, image_loc=image_loc)
+        pooled_output = self.pooler(sequence_output)
+
+        return sequence_output, pooled_output
+
+
 class BertForVLPreTraining(BertPreTrainedModel):
     """BERT model with multimodal pre-training heads.
     """
@@ -1152,9 +1173,9 @@ class BertForVLPreTraining(BertPreTrainedModel):
         else:
             if output_all_encoded_layers:
                 return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, all_attention_mask, \
-                        pooled_output, encoded_layers_t, encoded_layers_v
+                       pooled_output, encoded_layers_t, encoded_layers_v
             return prediction_scores_t, prediction_scores_v_dict, seq_relationship_score, vqa_score, \
-                    all_attention_mask, pooled_output
+                   all_attention_mask, pooled_output
 
 
 class BertForVLTasks(BertPreTrainedModel):
@@ -1171,9 +1192,9 @@ class BertForVLTasks(BertPreTrainedModel):
             task_type = task_cfg[task_id]["type"]
             if task_type in {"VL-classifier", "VL-classifier-GQA"}:
                 task2clf[task_id] = SimpleClassifier(config.pooler_size, config.clf_hidden_size,
-                                                     task_cfg[task_id]["num_labels"])
+                                                     task_cfg[task_id]["num_labels"], config.layer_norm_eps)
             elif task_type == "VL-binary-classifier":
-                task2clf[task_id] = SimpleClassifier(config.pooler_size * 2, config.clf_hidden_size, 2)
+                task2clf[task_id] = SimpleClassifier(config.pooler_size * 2, config.clf_hidden_size, 2, config.layer_norm_eps)
             elif task_type == "VL-tri-classifier":
                 task2clf[task_id] = nn.Linear(config.pooler_size, 3)  # for Visual Entailiment tasks
             elif task_type == "VL-logit":
@@ -1254,3 +1275,89 @@ class BertForVLTasks(BertPreTrainedModel):
             return vil_prediction, vision_prediction, linguistic_prediction, all_attention_mask, \
                    encoded_layers_t, encoded_layers_v
         return vil_prediction, vision_prediction, linguistic_prediction, all_attention_mask
+
+
+class M3PForVLTasks(BertPreTrainedModel):
+    def __init__(self, config, task_cfg, task_ids, dropout_prob=0.1):
+        super(M3PForVLTasks, self).__init__(config)
+
+        self.bert = M3PModel(config)
+        self.dropout = nn.Dropout(dropout_prob)
+        # FIXME ?
+        # self.cls = BertPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
+
+        self.config = config
+        self.task_cfg = task_cfg
+        task2clf = {}
+        for task_id in task_ids:
+            task_type = task_cfg[task_id]["type"]
+            if task_type in {"VL-classifier", "VL-classifier-GQA"}:
+                task2clf[task_id] = SimpleClassifier(config.pooler_size, config.clf_hidden_size,
+                                                     task_cfg[task_id]["num_labels"], config.layer_norm_eps)
+            elif task_type == "VL-binary-classifier":
+                task2clf[task_id] = SimpleClassifier(config.pooler_size * 2, config.clf_hidden_size, 2, config.layer_norm_eps)
+            elif task_type == "VL-tri-classifier":
+                task2clf[task_id] = nn.Linear(config.pooler_size, 3)  # for Visual Entailiment tasks
+            elif task_type == "VL-logit":
+                task2clf[task_id] = nn.Linear(config.pooler_size, 1)
+            elif task_type.startswith("V-logit"):
+                if task_cfg[task_id].get("num_clf_layers", 1) == 2:
+                    task2clf[task_id] = torch.nn.Sequential(
+                        nn.Linear(config.v_hidden_size, config.v_hidden_size),
+                        GeLU(),
+                        torch.nn.Dropout(config.v_attention_probs_dropout_prob, inplace=False),
+                        nn.Linear(config.v_hidden_size, 1)
+                    )
+                else:
+                    task2clf[task_id] = nn.Linear(config.v_hidden_size, 1)
+            else:
+                raise ValueError("Undefined task type: %s" % task_type)
+
+        self.clfs_dict = nn.ModuleDict(task2clf)
+
+        self.fusion_method = config.fusion_method
+        self.apply(self.init_weights)
+
+    def forward(
+        self,
+        input_txt,
+        input_imgs,
+        image_loc,
+        task_id,
+        token_type_ids=None,
+        attention_mask=None,
+        image_attention_mask=None,
+        output_all_encoded_layers=False,
+        output_all_attention_masks=False,
+    ):
+
+        sequence_output, pooled_output = self.bert(
+            input_txt,
+            input_imgs,
+            image_loc,
+            token_type_ids,
+            attention_mask,
+            image_attention_mask,
+            output_all_encoded_layers=output_all_encoded_layers,
+            output_all_attention_masks=output_all_attention_masks,
+        )
+
+        linguisic_prediction, vision_prediction = None, None
+
+        pooled_output = self.dropout(pooled_output)
+
+        if self.task_cfg[task_id]["type"].startswith("V-logit"):
+            raise NotImplementedError("V-logit for M3P -- get the sequence_output_v")
+            # vil_prediction = self.clfs_dict[task_id](self.dropout(sequence_output_v)) + (
+            #     (1.0 - image_attention_mask) * -10000.0).unsqueeze(2).to(dtype=next(self.parameters()).dtype)
+        elif self.task_cfg[task_id]["type"] == "VL-binary-classifier":
+            # NLVR
+            vil_prediction = self.clfs_dict[task_id](pooled_output.view(-1, pooled_output.size(1) * 2))
+        else:
+            vil_prediction = self.clfs_dict[task_id](pooled_output)
+
+        if output_all_encoded_layers:
+            raise NotImplementedError("output_all_encoded_layers for M3P")
+            # return vil_prediction, vision_prediction, linguisic_prediction, all_attention_mask, \
+            #        encoded_layers_t, encoded_layers_v
+        return vil_prediction, vision_prediction, linguisic_prediction, None  # all_attention_mask

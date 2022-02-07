@@ -153,30 +153,20 @@ class VQAClassificationDataset(Dataset):
         self._add_global_imgfeat = add_global_imgfeat
         self._append_mask_sep = append_mask_sep
 
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length) +
-                ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
+
         if not os.path.exists(cache_path):
             self.entries = _load_dataset(dataroot, split)
             self.tokenize(max_seq_length)
@@ -205,8 +195,8 @@ class VQAClassificationDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (max_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), max_length)
             entry["q_token"] = tokens
@@ -278,7 +268,7 @@ class VQAClassificationDataset(Dataset):
             if labels is not None:
                 target.scatter_(0, labels, scores)
 
-        return features, spatials, image_mask, question, target, input_mask, segment_ids, question_id
+        return features, spatials, image_mask, question, target, input_mask, segment_ids, question_id, index
 
     def __len__(self):
         return len(self.entries)

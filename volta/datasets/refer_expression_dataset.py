@@ -108,34 +108,19 @@ class ReferExpressionDataset(Dataset):
         self._num_locs = num_locs
         self._add_global_imgfeat = add_global_imgfeat
 
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -195,8 +180,8 @@ class ReferExpressionDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (self._max_seq_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), self._max_seq_length)
             entry["token"] = tokens
@@ -265,7 +250,7 @@ class ReferExpressionDataset(Dataset):
         input_mask = entry["input_mask"]
         segment_ids = entry["segment_ids"]
 
-        return features, spatials, image_mask, caption, target, input_mask, segment_ids, image_id
+        return features, spatials, image_mask, caption, target, input_mask, segment_ids, image_id, index
 
     def __len__(self):
         return len(self.entries)

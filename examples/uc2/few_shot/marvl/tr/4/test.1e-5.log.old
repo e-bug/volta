@@ -1,0 +1,26 @@
+WARNING:tensorflow:From /home/projects/ku_00062/envs/iglue/lib/python3.6/site-packages/tensorpack/callbacks/hooks.py:17: The name tf.train.SessionRunHook is deprecated. Please use tf.estimator.SessionRunHook instead.
+
+WARNING:tensorflow:From /home/projects/ku_00062/envs/iglue/lib/python3.6/site-packages/tensorpack/tfutils/optimizer.py:18: The name tf.train.Optimizer is deprecated. Please use tf.compat.v1.train.Optimizer instead.
+
+WARNING:tensorflow:From /home/projects/ku_00062/envs/iglue/lib/python3.6/site-packages/tensorpack/tfutils/sesscreate.py:20: The name tf.train.SessionCreator is deprecated. Please use tf.compat.v1.train.SessionCreator instead.
+
+11/23/2021 18:18:24 - INFO - __main__ -   device: cuda n_gpu: 1, distributed training: False
+11/23/2021 18:18:24 - INFO - volta.task_utils -   Loading NLVR2 Dataset with batch size 512
+11/23/2021 18:18:25 - INFO - volta.train_utils -   logging file at: pytorch_model_best.bin-
+11/23/2021 18:18:25 - INFO - volta.utils -   loading weights file /home/projects/ku_00062/checkpoints/iglue/fewshot/marvl/MaRVLtr_16/ctrl_muniter/1e-5/NLVR2_ctrl_muniter_base/pytorch_model_best.bin
+11/23/2021 18:18:31 - INFO - volta.utils -   
+***** Running evaluation *****
+  Num Iters:  3
+  Batch size:  512
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+huggingface/tokenizers: The current process just got forked, after parallelism has already been used. Disabling parallelism to avoid deadlocks...
+To disable this warning, you can either:
+	- Avoid using `tokenizers` before the fork if possible
+	- Explicitly set the environment variable TOKENIZERS_PARALLELISM=(true | false)
+  0%|          | 0/3 [00:00<?, ?it/s]0/3 33%|███▎      | 1/3 [00:14<00:28, 14.23s/it]1/3 67%|██████▋   | 2/3 [00:16<00:10, 10.75s/it]2/3100%|██████████| 3/3 [00:17<00:00,  7.76s/it]
+11/23/2021 18:18:54 - INFO - volta.train_utils -   Eval task TASK12 on iteration 0 
+11/23/2021 18:18:54 - INFO - volta.train_utils -   Validation [NLVR2]: loss 1.700 score 54.831 
+11/23/2021 18:18:54 - INFO - __main__ -   Consistency: 4.067796610169491

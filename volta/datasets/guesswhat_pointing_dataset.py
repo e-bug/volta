@@ -73,10 +73,12 @@ class GuessWhatPointingDataset(Dataset):
         gt_image_features_reader: ImageFeaturesH5Reader,
         tokenizer: AutoTokenizer,
         bert_model,
-        clean_datasets,
         padding_index: int = 0,
-        max_seq_length: int = 20,
-        max_region_num: int = 60,
+        max_seq_length: int = 16,
+        max_region_num: int = 37,
+        num_locs=5,
+        add_global_imgfeat=None,
+        append_mask_sep=False,
     ):
         self.split = split
         self.num_labels = 1
@@ -87,42 +89,23 @@ class GuessWhatPointingDataset(Dataset):
         self._padding_index = padding_index
         self._max_seq_length = max_seq_length
         self.dataroot = dataroot
-        self.entries = self._load_annotations(clean_datasets)
+        self.entries = self._load_annotations(dataroot)
 
         self.max_region_num = max_region_num
 
-        clean_train = "_cleaned" if clean_datasets else ""
-
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -225,8 +208,8 @@ class GuessWhatPointingDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (self._max_seq_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), self._max_seq_length)
             entry["token"] = tokens
@@ -318,6 +301,7 @@ class GuessWhatPointingDataset(Dataset):
             multiple_choice_idx,
             co_attention_mask,
             image_id,
+            index
         )
 
     def __len__(self):

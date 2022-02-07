@@ -496,6 +496,18 @@ class PreTrainedModel(nn.Module):
                 nums.append(num)
         for old_key, new_key, _ in sorted(zip(old_keys, new_keys, nums), key=lambda x: x[2], reverse=True):
             state_dict[new_key] = state_dict.pop(old_key)
+        if config.model == "roberta":
+            old_keys = list(state_dict.keys())
+            new_keys = []
+            for k in old_keys:
+                new_key = k.replace("roberta", "bert")
+                new_key = new_key.replace("lm_head.dense", "cls.predictions.transform.dense")
+                new_key = new_key.replace("lm_head.layer_norm", "cls.predictions.transform.LayerNorm")
+                new_key = new_key.replace("lm_head", "cls.predictions")
+                new_keys.append(new_key)
+            #new_keys = [k.replace("roberta", "bert") for k in old_keys]
+            for old_key, new_key in zip(old_keys, new_keys):
+                state_dict[new_key] = state_dict.pop(old_key)
 
         # Load from a PyTorch state_dict
         missing_keys = []

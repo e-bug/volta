@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH --ntasks=1 --cpus-per-task=4 --mem=2GB
+#SBATCH -p gpu --gres=gpu:1
+#SBATCH --time=6:00:00
+#SBATCH --job-name="marvl"
+
+source scl_source enable devtoolset-7
+export CUDA_HOME=/usr/local/cuda
+export LD_LIBRARY_PATH=${CUDA_HOME}/lib64
+PATH=${CUDA_HOME}/bin:${PATH}
+export PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/pmh864/libs/anaconda3/lib
+
+bash marvl-fewshot_resnext101_npy-proposal.sh

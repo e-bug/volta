@@ -6,7 +6,6 @@
 
 import os
 import sys
-import json
 import yaml
 import random
 import logging
@@ -23,12 +22,13 @@ import torch.distributed as dist
 
 from pytorch_transformers.optimization import AdamW, WarmupConstantSchedule, WarmupLinearSchedule
 
-from volta.config import BertConfig
+from volta.config import BertConfig, M3PConfig
 from volta.optimization import RAdam
-from volta.encoders import BertForVLTasks
+from volta.encoders import BertForVLTasks, M3PForVLTasks
 from volta.train_utils import freeze_layers, tbLogger, summary_parameters, save, resume
 from volta.task_utils import LoadDataset, LoadLoss, ForwardModelsTrain, ForwardModelsVal
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -45,6 +45,8 @@ def parse_args():
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
+    parser.add_argument("--is_m3p", action='store_true', default=False,
+                        help="Use M3P.")
     parser.add_argument("--config_file", default="config/vilbert_base.json", type=str,
                         help="The config file which specified the model details.")
     parser.add_argument("--resume_file", default="", type=str,
@@ -56,19 +58,42 @@ def parse_args():
                         help="The logging directory where the training logs will be written.")
     parser.add_argument("--save_name", default="", type=str,
                         help="save name for training.")
+    parser.add_argument("--save_best_only", default=False, action="store_true")
+    parser.add_argument("--save_every_num_epochs", default=1, type=int)
     # Task
+    parser.add_argument("--train_split", default="", type=str)
+    parser.add_argument("--val_split", default="", type=str)
     parser.add_argument("--tasks_config_file", default="config_tasks/vilbert_trainval_tasks.yml", type=str,
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
+    parser.add_argument("--train_annotations_jsonpath", default="", type=str,
+                        help="train_annotations_jsonpath")
+    parser.add_argument("--val_annotations_jsonpath", default="", type=str,
+                        help="val_annotations_jsonpath")
+    parser.add_argument("--train_features_lmdbpath", default="", type=str)
     # Training
-    parser.add_argument("--num_train_epochs", default=20, type=int,
+    parser.add_argument("--num_epoch", default=None, type=int,
+                        help="Max number of training epochs to perform.")
+    parser.add_argument("--optim_train_epochs", default=20, type=int,
                         help="Total number of training epochs to perform.")
     parser.add_argument("--gradient_accumulation_steps", dest="grad_acc_steps", type=int, default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
     parser.add_argument("--drop_last", action="store_true",
                         help="whether to drop last incomplete batch")
+    parser.add_argument("--batch_size", default=None, type=int, 
+                        help="overwrites the config_tasks batch size")
+    parser.add_argument("--eval_batch_size", default=None, type=int,
+                        help="overwrites the config_tasks batch size")
+    parser.add_argument("--max_val_batches", default=-1, type=int)
+    parser.add_argument("--loss", default="", type=str,
+                        help="alternative loss name")
+    parser.add_argument("--eval_steps", default=sys.maxsize, type=int,
+                        help="when to evaluate model")
+    parser.add_argument("--cache", default=5000, type=int)
     # Scheduler
+    parser.add_argument("--lr", default=None, type=float, 
+                        help="overwrites the config_tasks learning rate")
     parser.add_argument("--lr_scheduler", default="warmup_linear", type=str,
                         help="whether use learning rate scheduler.")
     parser.add_argument("--warmup_proportion", default=0.1, type=float,
@@ -85,6 +110,7 @@ def parse_args():
                         help="local_rank for distributed training on gpus")
     parser.add_argument("--num_workers", type=int, default=16,
                         help="Number of workers in the dataloader.")
+    parser.add_argument("--num_val_workers", type=int, default=2)
     parser.add_argument("--in_memory", default=False, type=bool,
                         help="whether use chunck for parallel training.")
     # Optimization
@@ -126,7 +152,10 @@ def main():
     logger.info(f"device: {device} n_gpu: {n_gpu}, distributed training: {bool(args.local_rank != -1)}")
 
     # Load config
-    config = BertConfig.from_json_file(args.config_file)
+    if args.is_m3p:
+        config = M3PConfig.from_json_file(args.config_file)
+    else:
+        config = BertConfig.from_json_file(args.config_file)
 
     # Load task config
     with open(args.tasks_config_file, "r") as f:
@@ -134,7 +163,7 @@ def main():
     task_id = args.task.strip()
     task = "TASK" + task_id
     task_name = task_cfg[task]["name"]
-    base_lr = task_cfg[task]["lr"]
+    base_lr = args.lr or task_cfg[task]["lr"]
     if task_cfg[task].get("fusion_method", None):
         # VL-BERT pooling for VQA
         config.fusion_method = task_cfg[task]["fusion_method"]
@@ -170,7 +199,12 @@ def main():
         os.makedirs(args.output_dir)
 
     # Model
-    model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+    if "roberta" in config.bert_model:
+        config.model = "roberta"
+    if args.is_m3p:
+        model = M3PForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+    else:
+        model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
     if task_cfg[task].get("embed_clf", None):
         logger.info('Initializing classifier weight for %s from pretrained word embeddings...' % task)
         answers_word_embed = []
@@ -195,7 +229,7 @@ def main():
 
     # Optimization details
     freeze_layers(model)
-    criterion = LoadLoss(task_cfg, args.task)
+    criterion = LoadLoss(args, task_cfg, args.task)
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = []
     for key, value in dict(model.named_parameters()).items():
@@ -218,7 +252,7 @@ def main():
                           correct_bias=args.adam_correct_bias)
     elif args.optim == "RAdam":
         optimizer = RAdam(optimizer_grouped_parameters, lr=base_lr)
-    num_train_optim_steps = (task2num_iters[task] * args.num_train_epochs // args.grad_acc_steps)
+    num_train_optim_steps = (task2num_iters[task] * args.optim_train_epochs // args.grad_acc_steps)
     warmup_steps = args.warmup_steps or args.warmup_proportion * num_train_optim_steps
     if args.lr_scheduler == "warmup_linear":
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optim_steps)
@@ -259,18 +293,23 @@ def main():
         print("  Num steps: %d" % num_train_optim_steps)
 
     # Train
-    for epoch_id in tqdm(range(start_epoch, args.num_train_epochs), desc="Epoch"):
+    scores = 0
+    max_epoch = args.num_epoch or task_cfg[task]['num_epoch']
+    for epoch_id in tqdm(range(start_epoch, max_epoch), desc="Epoch"):
         model.train()
+        # from pudb import set_trace; set_trace()
         for step, batch in enumerate(dl_train):
-            iter_id = start_iter_id + step + (epoch_id * len(dl_train))
+            iter_id = start_iter_id + step // args.grad_acc_steps + (epoch_id * len(dl_train))
 
             loss, score = ForwardModelsTrain(config, task_cfg, device, task, batch, model, criterion)
+            scores += score
 
             if args.grad_acc_steps > 1:
                 loss = loss / args.grad_acc_steps
             loss.backward()
 
             if (step + 1) % args.grad_acc_steps == 0:
+                
                 # Clip gradient
                 if args.clip_grad_norm > 0:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad_norm)
@@ -284,28 +323,39 @@ def main():
                 global_step += 1
 
                 if default_gpu:
-                    tb_logger.step_train(epoch_id, iter_id, float(loss), float(score),
+                    tb_logger.step_train(epoch_id, iter_id, float(loss), float(scores/args.grad_acc_steps),
                                          optimizer.param_groups[0]["lr"], task, "train")
+                    scores = 0
 
             if (step % (20 * args.grad_acc_steps) == 0) and step != 0 and default_gpu:
                 tb_logger.showLossTrain()
 
             # Decide whether to evaluate task
-            if iter_id != 0 and iter_id % task2num_iters[task] == 0:
+            if iter_id != 0 and iter_id % (args.eval_steps - 1) == 0:
                 score = evaluate(config, dl_val, task_cfg, device, task, model, criterion, epoch_id, default_gpu, tb_logger)
                 if score > max_score:
                     max_score = score
-                    save(save_path, logger, epoch_id, model, optimizer, scheduler,
+                    save(save_path, logger, iter_id, model, optimizer, scheduler,
                          global_step, tb_logger, default_gpu, max_score, is_best=True)
 
-        save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score)
+        torch.cuda.empty_cache()
+
+        score = evaluate(config, dl_val, task_cfg, device, task, model, criterion, epoch_id, default_gpu, tb_logger, args.max_val_batches)
+        if score > max_score:
+            max_score = score
+            save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score, is_best=True)
+        elif (not args.save_best_only) and ((epoch_id+1) % args.save_every_num_epochs == 0):
+            save(save_path, logger, epoch_id, model, optimizer, scheduler, global_step, tb_logger, default_gpu, max_score)
 
     tb_logger.txt_close()
+    print("Best Validation score: %.3f " % (max_score * 100.0))
 
 
-def evaluate(config, dataloader_val, task_cfg, device, task_id, model, criterion, epoch_id, default_gpu, tb_logger):
+def evaluate(config, dataloader_val, task_cfg, device, task_id, model, criterion, epoch_id, default_gpu, tb_logger, num_batches=-1):
     model.eval()
     for i, batch in enumerate(dataloader_val):
+        if i == (num_batches - 1):
+            break
         loss, score, batch_size = ForwardModelsVal(config, task_cfg, device, task_id, batch, model, criterion)
         tb_logger.step_val(epoch_id, float(loss), float(score), task_id, batch_size, "val")
         if default_gpu:

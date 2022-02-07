@@ -268,30 +268,19 @@ class FlickrVis4LangDataset(Dataset):
         self.masking = masking
         self.threshold = threshold
 
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -369,8 +358,8 @@ class FlickrVis4LangDataset(Dataset):
             if len(mask_sent_ids) < self._max_seq_length:
                 padding = [self._padding_index] * (self._max_seq_length - len(mask_sent_ids))
                 mask_sent_ids = mask_sent_ids + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
                 lm_label_ids += [-1] * len(padding)
 
             assert_eq(len(mask_sent_ids), self._max_seq_length)

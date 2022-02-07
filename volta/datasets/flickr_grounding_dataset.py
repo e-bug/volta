@@ -4,14 +4,15 @@
 # LICENSE file in the root directory of this source tree.
 
 import os
+import _pickle as cPickle
 
 import torch
 from torch.utils.data import Dataset
+
 import numpy as np
 
 from transformers import AutoTokenizer
 from ._image_features_reader import ImageFeaturesH5Reader
-import _pickle as cPickle
 
 import xml.etree.ElementTree as ET
 
@@ -190,56 +191,39 @@ class FlickrGroundingDataset(Dataset):
         gt_image_features_reader: ImageFeaturesH5Reader,
         tokenizer: AutoTokenizer,
         bert_model,
-        clean_datasets,
         padding_index: int = 0,
         max_seq_length: int = 20,
         max_region_num: int = 60,
+        num_locs=5,
+        add_global_imgfeat=None,
+        append_mask_sep=False,
     ):
         self.split = split
         self.num_labels = 1
+        self._max_region_num = max_region_num
+        self._max_seq_length = max_seq_length
         self._image_features_reader = image_features_reader
         self._gt_image_features_reader = gt_image_features_reader
         self._tokenizer = tokenizer
-
         self._padding_index = padding_index
-        self._max_seq_length = max_seq_length
-        self.dataroot = dataroot
-        self.entries = self._load_annotations(clean_datasets)
+        self._num_locs = num_locs
+        self._add_global_imgfeat = add_global_imgfeat
 
-        self.max_region_num = max_region_num
+        self.entries = self._load_annotations(dataroot)
 
-        clean_train = "_cleaned" if clean_datasets else ""
-
-        if "roberta" in bert_model:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + "roberta"
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
-        else:
-            cache_path = os.path.join(
-                dataroot,
-                "cache",
-                task
-                + "_"
-                + split
-                + "_"
-                + str(max_seq_length)
-                + "_"
-                + str(max_region_num)
-                + clean_train
-                + ".pkl",
-            )
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
+        cache_path = os.path.join(
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
+        )
 
         if not os.path.exists(cache_path):
             self.tokenize()
@@ -249,16 +233,10 @@ class FlickrGroundingDataset(Dataset):
             print("loading entries from %s" % (cache_path))
             self.entries = cPickle.load(open(cache_path, "rb"))
 
-    def _load_annotations(self, clean_datasets):
+    def _load_annotations(self, dataroot):
 
         entries = []
         remove_ids = []
-        if clean_datasets:
-            remove_ids = np.load(
-                os.path.join(self.dataroot, "cache", "flickr_test_ids.npy")
-            )
-            remove_ids = [int(x) for x in remove_ids]
-
         with open(
             os.path.join(
                 "/checkpoint/vedanuj/datasets/flickr30k", "%s.txt" % self.split
@@ -323,8 +301,8 @@ class FlickrGroundingDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (self._max_seq_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), self._max_seq_length)
             entry["token"] = tokens
@@ -332,7 +310,6 @@ class FlickrGroundingDataset(Dataset):
             entry["segment_ids"] = segment_ids
 
     def tensorize(self):
-
         for entry in self.entries:
             token = torch.from_numpy(np.array(entry["token"]))
             entry["token"] = token
@@ -356,9 +333,7 @@ class FlickrGroundingDataset(Dataset):
         features = features[:num_boxes]
 
         if self.split == "train":
-            gt_features, gt_num_boxes, gt_boxes, gt_boxes_ori = self._gt_image_features_reader[
-                image_id
-            ]
+            gt_features, gt_num_boxes, gt_boxes, gt_boxes_ori = self._gt_image_features_reader[image_id]
 
             # merge two boxes, and assign the labels.
             gt_boxes_ori = gt_boxes_ori[1:gt_num_boxes]
@@ -423,6 +398,7 @@ class FlickrGroundingDataset(Dataset):
             segment_ids,
             co_attention_mask,
             image_id,
+            index
         )
 
     def __len__(self):

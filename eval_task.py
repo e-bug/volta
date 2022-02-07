@@ -21,11 +21,12 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 
-from volta.config import BertConfig
-from volta.encoders import BertForVLTasks
+from volta.config import BertConfig, M3PConfig
+from volta.encoders import BertForVLTasks, M3PForVLTasks
 from volta.train_utils import tbLogger
 from volta.task_utils import LoadDatasetEval, LoadLoss, EvaluatingModel
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
@@ -42,6 +43,8 @@ def parse_args():
     parser.add_argument("--from_pretrained", default="bert-base-uncased", type=str,
                         help="Bert pre-trained model selected in the list: bert-base-uncased, "
                              "bert-large-uncased, bert-base-cased, bert-base-multilingual, bert-base-chinese.")
+    parser.add_argument("--is_m3p", action='store_true', default=False,
+                        help="Use M3P.")
     parser.add_argument("--config_file", default="config/bert_config.json", type=str,
                         help="The config file which specified the model details.")
     # Output
@@ -54,6 +57,12 @@ def parse_args():
                         help="The config file which specified the tasks details.")
     parser.add_argument("--task", default="", type=str,
                         help="training task number")
+    parser.add_argument("--val_annotations_jsonpath", default="", type=str,
+                        help="alternative annotations json path")
+    parser.add_argument("--val_features_lmdbpath", default="", type=str,
+                        help="alternative features lmdb path")
+    parser.add_argument("--loss", default="", type=str,
+                        help="alternative loss name")
     # Evaluation
     parser.add_argument("--split", default="", type=str,
                         help="which split to use.")
@@ -69,6 +78,7 @@ def parse_args():
                         help="local_rank for distributed training on gpus")
     parser.add_argument("--num_workers", type=int, default=16,
                         help="Number of workers in the dataloader.")
+    parser.add_argument("--num_val_workers", type=int, default=2)
     parser.add_argument("--in_memory", default=False, type=bool,
                         help="whether use chunck for parallel training.")
     parser.add_argument("--use_chunk", default=0, type=float,
@@ -99,7 +109,10 @@ def main():
     logger.info(f"device: {device} n_gpu: {n_gpu}, distributed training: {bool(args.local_rank != -1)}")
 
     # Load config
-    config = BertConfig.from_json_file(args.config_file)
+    if args.is_m3p:
+        config = M3PConfig.from_json_file(args.config_file)
+    else:
+        config = BertConfig.from_json_file(args.config_file)
 
     # Load task config
     with open(args.tasks_config_file, "r") as f:
@@ -130,10 +143,15 @@ def main():
                          1, save_logger=False, txt_name="eval.txt")
 
     # Model
-    model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+    if "roberta" in config.bert_model:
+        config.model = "roberta"
+    if args.is_m3p:
+        model = M3PForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
+    else:
+        model = BertForVLTasks.from_pretrained(args.from_pretrained, config=config, task_cfg=task_cfg, task_ids=[task])
 
     # Optimization details
-    criterion = LoadLoss(task_cfg, args.task)
+    criterion = LoadLoss(args, task_cfg, args.task)
 
     # Move to GPU(s)
     model.to(device)
@@ -167,6 +185,16 @@ def main():
         sys.stdout.flush()
     # save the result or evaluate the result.
     ave_score = tb_logger.showLossVal(task)
+    if task == "TASK12":
+        from collections import defaultdict
+        sent2corrects = defaultdict(list)
+        for e in results:
+            sent2corrects[e["sentence"]].append(e["prediction"] == e["label"])
+        s = 0
+        for l in sent2corrects.values():
+            s += (sum(l) == len(l))
+        consistency = float(s) / len(sent2corrects) * 100
+        logger.info(f"Consistency: {consistency}")
 
     if args.split:
         json_path = os.path.join(savePath, args.split)

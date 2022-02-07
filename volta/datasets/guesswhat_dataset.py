@@ -79,9 +79,13 @@ class GuessWhatDataset(Dataset):
         image_features_reader: ImageFeaturesH5Reader,
         gt_image_features_reader: ImageFeaturesH5Reader,
         tokenizer: AutoTokenizer,
+        bert_model,
         padding_index: int = 0,
         max_seq_length: int = 16,
         max_region_num: int = 37,
+        num_locs=5,
+        add_global_imgfeat=None,
+        append_mask_sep=False,
     ):
         super().__init__()
         self.split = split
@@ -91,9 +95,21 @@ class GuessWhatDataset(Dataset):
         self._image_features_reader = image_features_reader
         self._tokenizer = tokenizer
         self._padding_index = padding_index
+        
+        os.makedirs(os.path.join(dataroot, "cache"), exist_ok=True)
         cache_path = os.path.join(
-            dataroot, "cache", task + "_" + split + "_" + str(max_seq_length) + ".pkl"
+            dataroot,
+            "cache",
+            task
+            + "_"
+            + split
+            + "_"
+            + bert_model.split("/")[-1]
+            + "_"
+            + str(max_seq_length)
+            + ".pkl",
         )
+
         if not os.path.exists(cache_path):
             self.entries = _load_dataset(dataroot, split)
             self.tokenize(max_seq_length)
@@ -128,8 +144,8 @@ class GuessWhatDataset(Dataset):
                 # Note here we pad in front of the sentence
                 padding = [self._padding_index] * (max_length - len(tokens))
                 tokens = tokens + padding
-                input_mask += padding
-                segment_ids += padding
+                input_mask += [0] * len(padding)
+                segment_ids += [0] * len(padding)
 
             assert_eq(len(tokens), max_length)
             entry["q_token"] = tokens
@@ -206,6 +222,7 @@ class GuessWhatDataset(Dataset):
             segment_ids,
             co_attention_mask,
             question_id,
+            index
         )
 
     def __len__(self):

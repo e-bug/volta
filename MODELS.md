@@ -26,6 +26,15 @@ All the models pretrained with 10 random seeds in our controlled setup can be do
 |-------------------|--------|
 | [LXMERT (Original)](https://sid.erda.dk/share_redirect/cFGANaAtmN) | [airsplay/lxmert](https://nlp.cs.unc.edu/data/github_pretrain/lxmert20/Epoch20_LXRT.pth) |
 
+### Multilingual Models
+
+| Model      | XVNLI | xGQA | MaRVL | xFlickr&CO IR | xFlickr&CO TR | WIT IR | WIT TR |
+|------------|-------|------|-------|---------------|---------------|--------|--------|
+| [mUNITER](https://sid.erda.dk/sharelink/eYYhxHbth5)| 53.69 |  9.97 | 53.72 | 8.06 | 8.86 | 9.16 | 10.48 |
+| [xUNITER](https://sid.erda.dk/sharelink/fhT5bmg56Q)| 58.48 | 21.72 | 54.59 | 14.04 | 13.51 | 8.72 | 9.81 |
+| [UC2](https://sid.erda.dk/sharelink/gEHwACIX57)    | 62.05 | 29.35 | 57.28 | 20.31 | 17.89 | 7.83 | 9.09 |
+| [M3P](https://sid.erda.dk/sharelink/hWHrRY7lag)    | 58.25 | 28.17 | 56.00 | 12.91 | 11.90 | 8.12 | 9.98 |
+
 
 ## Models Definition
 

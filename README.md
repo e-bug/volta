@@ -6,7 +6,9 @@ This is the implementation of the framework described in the paper:
 We provide the code for reproducing our results, preprocessed data and pretrained models.
 
 ## News
-- 09-2021: Added code for `cross-modal ablation` ([Frank et al., EMNLP 2021](https://arxiv.org/pdf/2109.04448.pdf)) [[Original code](https://github.com/e-bug/cross-modal-ablation)]
+- 02-2022: Added code for [IGLUE](https://iglue-benchmark.github.io/) ([Bugliarello et al., 2022](https://arxiv.org/pdf/2201.11732.pdf)) [[Original code](https://github.com/e-bug/iglue)]
+- 02-2022: Added code for [MaRVL](https://marvl-challenge.github.io/) ([Liu and Bugliarello et al., EMNLP 2021](https://arxiv.org/pdf/2109.13238.pdf)) [[Original code](https://github.com/marvl-challenge/marvl-code)]
+- 09-2021: Added code for `cross-modal ablation` ([Frank and Bugliarello et al., EMNLP 2021](https://arxiv.org/pdf/2109.04448.pdf)) [[Original code](https://github.com/e-bug/cross-modal-ablation)]
 
 
 ## Repository Setup
@@ -47,6 +49,8 @@ python setup.py develop
 ## Data
 
 Check out [`data/README.md`](data/README.md) for links to preprocessed data and data preparation steps.
+
+[`features_extraction/`](features_extraction) contains our latest feature extraction steps in `hdf5` and `npy` instead of `csv`, and with different backbones. Steps for the IGLUE datasets can be found in its [datasets sub-directory](features_extraction/datasets).
 
 
 ## Models

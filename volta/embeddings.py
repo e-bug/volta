@@ -49,7 +49,7 @@ class BertEmbeddings(nn.Module):
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids, token_type_ids=None, position_ids=None):
@@ -70,30 +70,64 @@ class BertEmbeddings(nn.Module):
         return embeddings
 
 
-class RobertaEmbeddings(BertEmbeddings):
+class RobertaEmbeddings(nn.Module):
     """
     Same as BertEmbeddings with a tiny tweak for positional embeddings indexing.
     """
 
+    # Copied from transformers.models.bert.modeling_bert.BertEmbeddings.__init__
     def __init__(self, config):
-        super(RobertaEmbeddings, self).__init__(config)
-        self.padding_idx = 1
+        super().__init__()
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
-    def forward(self, input_ids, token_type_ids=None, position_ids=None):
-        seq_length = input_ids.size(1)
-        if position_ids is None:
-            # Position numbers begin at padding_idx+1. Padding symbols are ignored.
-            # cf. fairseq's `utils.make_positions`
-            position_ids = torch.arange(
-                self.padding_idx + 1,
-                seq_length + self.padding_idx + 1,
-                dtype=torch.long,
-                device=input_ids.device,
-            )
-            position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
-        return super(RobertaEmbeddings, self).forward(
-            input_ids, token_type_ids=token_type_ids, position_ids=position_ids
+        # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
+        # any TensorFlow checkpoint file
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        # position_ids (1, len position emb) is contiguous in memory and exported when serialized
+        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
+        # self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
+
+        # End copy
+        self.padding_idx = config.pad_token_id
+        self.position_embeddings = nn.Embedding(
+            config.max_position_embeddings, config.hidden_size, padding_idx=self.padding_idx
         )
+
+    def forward(self, input_ids=None, token_type_ids=None, position_ids=None):
+        input_shape = input_ids.size()
+        if position_ids is None:
+            # Create the position ids from the input token ids. Any padded tokens remain padded.
+            position_ids = create_position_ids_from_input_ids(input_ids, self.padding_idx).to(input_ids.device)
+        if token_type_ids is None:
+            token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=self.position_ids.device)
+        inputs_embeds = self.word_embeddings(input_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        position_embeddings = self.position_embeddings(position_ids)
+
+        embeddings = inputs_embeds + position_embeddings + token_type_embeddings
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+        return embeddings
+
+
+def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
+    """
+    Replace non-padding symbols with their position numbers. Position numbers begin at padding_idx+1. Padding symbols
+    are ignored. This is modified from fairseq's `utils.make_positions`.
+
+    Args:
+        x: torch.Tensor x:
+
+    Returns: torch.Tensor
+    """
+    # The series of casts and type-conversions here are carefully balanced to both work with ONNX export and XLA.
+    mask = input_ids.ne(padding_idx).int()
+    incremental_indices = (torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length) * mask
+    return incremental_indices.long() + padding_idx
 
 
 # ==================================================================================================================== #
@@ -133,7 +167,7 @@ class ViLBertImageEmbeddings(nn.Module):
 
         self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
         self.image_location_embeddings = nn.Linear(config.num_locs, config.v_hidden_size)
-        self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.v_hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.v_hidden_dropout_prob)
 
     def forward(self, input_ids, input_loc):
@@ -155,8 +189,8 @@ class LxmertImageEmbeddings(nn.Module):
 
         self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
         self.image_location_embeddings = nn.Linear(config.num_locs, config.v_hidden_size)
-        self.ImgLayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
-        self.LocLayerNorm = BertLayerNorm(config.v_hidden_size, eps=1e-12)
+        self.ImgLayerNorm = BertLayerNorm(config.v_hidden_size, eps=config.layer_norm_eps)
+        self.LocLayerNorm = BertLayerNorm(config.v_hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.v_hidden_dropout_prob)
 
     def forward(self, input_ids, input_loc):
@@ -215,12 +249,12 @@ class VLBertEmbeddings(nn.Module):
         if config.v_hidden_size != config.hidden_size:
             self.visual_1x1_text = nn.Linear(config.v_hidden_size, config.hidden_size)
             self.visual_1x1_object = nn.Linear(config.v_hidden_size, config.hidden_size)
-        self.visual_ln_text = BertLayerNorm(config.hidden_size, eps=1e-12)
-        self.visual_ln_object = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.visual_ln_text = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.visual_ln_object = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # init weights
@@ -316,7 +350,7 @@ class VisualBertEmbeddings(nn.Module):
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # Segment and position embedding for image features
@@ -404,24 +438,31 @@ class UniterEmbeddings(nn.Module):
     def __init__(self, config):
         super(UniterEmbeddings, self).__init__()
 
+        self.model = config.model
+        self.padding_idx = config.pad_token_id
+
         self.hidden_size = config.hidden_size
         self.initializer_range = config.initializer_range
 
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=0)
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=self.padding_idx)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
-        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
         self.image_location_embeddings = nn.Linear(config.num_locs, config.v_hidden_size)
-        self.image_layer_norm = BertLayerNorm(config.hidden_size, eps=1e-12)
-        self.image_location_layer_norm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        if self.model == "roberta":
+            self.image_token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        else:
+            self.image_token_type_embeddings = self.token_type_embeddings
+        self.image_layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.image_location_layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
 
-        self.v_LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
+        self.v_LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.v_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.special_initialize()
 
@@ -433,9 +474,13 @@ class UniterEmbeddings(nn.Module):
     def forward(self, token_ids, image_feat, image_loc, token_type_ids=None, position_ids=None):
         batch_size, num_boxes, _ = image_feat.shape
         seq_length = token_ids.size(1)
-
-        position_ids = torch.arange(seq_length, dtype=torch.long, device=token_ids.device)
-        position_ids = position_ids.unsqueeze(0).expand_as(token_ids)
+        
+        if position_ids is None and self.model == "roberta":
+            # Create the position ids from the input token ids. Any padded tokens remain padded.
+            position_ids = create_position_ids_from_input_ids(token_ids, self.padding_idx).to(token_ids.device)
+        else:
+            position_ids = torch.arange(seq_length, dtype=torch.long, device=token_ids.device)
+            position_ids = position_ids.unsqueeze(0).expand_as(token_ids)
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(token_ids)
 
@@ -448,8 +493,135 @@ class UniterEmbeddings(nn.Module):
 
         img_embeddings = self.image_layer_norm(self.image_embeddings(image_feat))
         loc_embeddings = self.image_location_layer_norm(self.image_location_embeddings(image_loc))
+        img_type_ids = torch.ones_like(image_feat[:, :, 0].long()) - int(self.model == "roberta")
+        v_token_type_embeddings = self.image_token_type_embeddings(img_type_ids)
+        v_embeddings = img_embeddings + loc_embeddings + v_token_type_embeddings
+        v_embeddings = self.v_LayerNorm(v_embeddings)
+        v_embeddings = self.v_dropout(v_embeddings)
+
+        return embeddings, v_embeddings
+
+
+class M3PEmbeddings(nn.Module):
+    """Construct the embeddings from word, position, token_type embeddings and visual embeddings.
+    """
+    def __init__(self, config):
+        super(M3PEmbeddings, self).__init__()
+
+        self.model = config.model
+        self.padding_idx = config.pad_token_id
+
+        self.hidden_size = config.hidden_size
+        self.initializer_range = config.initializer_range
+
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=self.padding_idx)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+
+        # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
+        # any TensorFlow checkpoint file
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
+        self.image_location_embeddings = nn.Linear(config.num_locs, config.v_hidden_size)
+
+        self.v_LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.v_dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.special_initialize()
+
+    def special_initialize(self):
+        # This function is used to init v_LayerNorm as LayerNorm
+        self.v_LayerNorm.weight = torch.nn.Parameter(copy.deepcopy(self.LayerNorm.weight.data), requires_grad=True)
+        self.v_LayerNorm.bias = torch.nn.Parameter(copy.deepcopy(self.LayerNorm.bias.data), requires_grad=True)
+
+    def forward(self, token_ids, image_feat, image_loc, token_type_ids=None, position_ids=None):
+        batch_size, num_boxes, _ = image_feat.shape
+        seq_length = token_ids.size(1)
+
+        img_embeddings = self.image_embeddings(image_feat)
+        loc_embeddings = self.image_location_embeddings(image_loc)
+        v_embeddings = img_embeddings + loc_embeddings
+        v_embeddings = self.v_LayerNorm(v_embeddings)
+        v_embeddings = self.v_dropout(v_embeddings)
+
+        words_embeddings = self.word_embeddings(token_ids)
+        cat_embeddings = torch.cat([v_embeddings, words_embeddings], dim=1)
+
+        cat_length = seq_length + num_boxes
+        position_ids = torch.arange(cat_length, dtype=torch.long, device=token_ids.device)
+        position_ids = position_ids.unsqueeze(0).expand_as(token_ids)
+        position_embeddings = self.position_embeddings(position_ids)
+
+        embeddings = cat_embeddings + position_embeddings
+        # FIXME: Add masking as embeddings *= mask -- we can actually pass text and viz masks and multiply above in the forward()
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        words_embeddings, v_embeddings = embeddings.split([img_embeddings.size(1), words_embeddings.size(1)], dim=1)
+
+        return words_embeddings, v_embeddings
+
+
+class UC2Embeddings(nn.Module):
+    """Construct the embeddings from word, position, token_type embeddings and visual embeddings.
+    """
+    def __init__(self, config):
+        super(UC2Embeddings, self).__init__()
+
+        self.model = config.model
+        self.padding_idx = config.pad_token_id
+
+        self.hidden_size = config.hidden_size
+        self.initializer_range = config.initializer_range
+
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=self.padding_idx)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.new_token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+
+        # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
+        # any TensorFlow checkpoint file
+        self.LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        self.image_embeddings = nn.Linear(config.v_feature_size, config.v_hidden_size)
+        self.image_location_embeddings = nn.Linear(config.num_locs, config.v_hidden_size)
+        self.image_token_type_embeddings = self.new_token_type_embeddings
+        self.image_layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.image_location_layer_norm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        # self.mask_embedding = nn.Embedding(2, img_dim, padding_idx=0)  #FIXME: omitted in current version
+
+        self.v_LayerNorm = BertLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.v_dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, token_ids, image_feat, image_loc, token_type_ids=None, position_ids=None):
+        batch_size, num_boxes, _ = image_feat.shape
+        seq_length = token_ids.size(1)
+
+        if position_ids is None:
+            # Create the position ids from the input token ids. Any padded tokens remain padded.
+            position_ids = create_position_ids_from_input_ids(token_ids, self.padding_idx).to(token_ids.device)
+        else:
+            position_ids = torch.arange(seq_length, dtype=torch.long, device=token_ids.device)
+            position_ids = position_ids.unsqueeze(0).expand_as(token_ids)
+        if token_type_ids is None:
+            token_type_ids = torch.zeros_like(token_ids)
+
+        words_embeddings = self.word_embeddings(token_ids)
+        position_embeddings = self.position_embeddings(position_ids)
+        token_type_embeddings = self.new_token_type_embeddings(token_type_ids)
+        embeddings = words_embeddings + position_embeddings + token_type_embeddings
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        # FIXME: the following is currently omitted
+        # if img_masks is not None:
+        #     self.mask_embedding.weight.data[0, :].fill_(0)
+        #     mask = self.mask_embedding(img_masks.long())
+        #     img_feat = img_feat + mask
+        img_embeddings = self.image_layer_norm(self.image_embeddings(image_feat))
+        loc_embeddings = self.image_location_layer_norm(self.image_location_embeddings(image_loc))
         img_type_ids = torch.ones_like(image_feat[:, :, 0].long())
-        v_token_type_embeddings = self.token_type_embeddings(img_type_ids)
+        v_token_type_embeddings = self.image_token_type_embeddings(img_type_ids)
         v_embeddings = img_embeddings + loc_embeddings + v_token_type_embeddings
         v_embeddings = self.v_LayerNorm(v_embeddings)
         v_embeddings = self.v_dropout(v_embeddings)
@@ -461,4 +633,6 @@ shared_embeddings = {
     "vl-bert": VLBertEmbeddings,
     "visualbert": VisualBertEmbeddings,
     "uniter": UniterEmbeddings,
+    "m3p": M3PEmbeddings,
+    "uc2": UC2Embeddings,
 }
