@@ -11,6 +11,7 @@
   "type_vocab_size": 2,
   "vocab_size": 119547,
   "bert_model": "bert-base-multilingual-cased",
+  "model": "bert",
   "do_lower_case": false,
   "num_locs": 5,
   "add_global_imgfeat": "first",
