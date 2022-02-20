@@ -21,12 +21,6 @@ from volta.datasets._image_features_reader import ImageFeaturesH5Reader
 logger = logging.getLogger(__name__)
 
 
-LossMap = {
-    "BCEWithLogitLoss": nn.BCEWithLogitsLoss(reduction="mean"),
-    "CrossEntropyLoss": nn.CrossEntropyLoss(),
-    "TripletLoss": triplet_loss,
-}
-
 def triplet_loss(rank_scores, target, margin=0.2):
     scores = torch.sigmoid(rank_scores)
     pos = scores[:, :1]
@@ -39,6 +33,12 @@ def LoadLoss(args, task_cfg, task_id):
     loss_name = args.loss or task_cfg[task]["loss"]
     loss = LossMap[loss_name]
     return loss
+
+LossMap = {
+    "BCEWithLogitLoss": nn.BCEWithLogitsLoss(reduction="mean"),
+    "CrossEntropyLoss": nn.CrossEntropyLoss(),
+    "TripletLoss": triplet_loss,
+}
 
 
 def ForwardModelsVal(config, task_cfg, device, task_id, batch, model, criterion):
