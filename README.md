@@ -52,6 +52,9 @@ Check out [`data/README.md`](data/README.md) for links to preprocessed data and 
 
 [`features_extraction/`](features_extraction) contains our latest feature extraction steps in `hdf5` and `npy` instead of `csv`, and with different backbones. Steps for the IGLUE datasets can be found in its [datasets sub-directory](features_extraction/datasets).
 
+NB: I have noticed that uploading LMDB files made their size grow to the order of TBs.
+So, instead, I recently uploaded the H5 versions that can quickly be converted to LMDB locally using [this script](https://github.com/e-bug/volta/blob/main/features_extraction/h5_to_lmdb.py).
+
 
 ## Models
 
