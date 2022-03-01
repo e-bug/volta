@@ -24,20 +24,19 @@ More recent (from [IGLUE](https://github.com/e-bug/iglue)) and with more backbon
 - [xFlickr&CO](https://sid.erda.dk/sharelink/cCObmVenjI)
 - [WIT](https://sid.erda.dk/sharelink/escPrWm3Tt)
 
+NB: I have noticed that uploading LMDB files made their size grow to the order of TBs.
+So, instead, I recently uploaded the H5 versions that can quickly be converted to LMDB locally using [this script](https://github.com/e-bug/volta/blob/main/features_extraction/h5_to_lmdb.py).
+
 ## Preprocessing Steps
 
-We rely on the `airsplay/bottom-up-attention` Docker image to extract image features from Faster R-CNN.
-This docker file for [`bottom-up-attention`](https://github.com/peteanderson80/bottom-up-attention) is available on 
-[docker hub](https://hub.docker.com/r/airsplay/bottom-up-attention) and can be downloaded with:
-```text
-sudo docker pull airsplay/bottom-up-attention
-```
+I originally relied on Hao Tan's [`airsplay/bottom-up-attention`](https://github.com/airsplay/bottom-up-attention) Docker image to extract image features from Faster R-CNN. 
+For more details about the Docker image, see the [LXMERT repository](https://github.com/airsplay/lxmert#faster-r-cnn-feature-extraction).
 
-For more details about the Docker image, 
-see the [LXMERT repository](https://github.com/airsplay/lxmert#faster-r-cnn-feature-extraction).
-Our scripts assume the [pretrained Caffe models](https://sid.erda.dk/sharelink/EgyY7wjCNf) 
-to be stored under [snap/pretrained/](snap/pretrained).
+Recently, I have switched to Hao Tan's [Detectron2 implementation](https://github.com/airsplay/py-bottom-up-attention) of 'Bottom-up feature extractor', which is compatible with the original Caffe implementation.
+See [here](https://github.com/e-bug/volta/tree/main/features_extraction#resnet-101-backbone-36-boxes) for step-by-step instructions.
+
+Moreover, it is possible to extract Faster R-CNN features with a ResNeXt-101 backbone from the [`mmf`](https://github.com/facebookresearch/mmf/) repository following [these instructions](https://github.com/e-bug/volta/tree/main/features_extraction#resnext-101-backbone-10-100-boxes).
 
 ---
 
-Check out the README files for each data set for detailed preprocessing procedures. 
+For detailed preprocessing procedures, check out the README files for each data set in this folder or under [`feature_extraction/`](../feature_extraction).
