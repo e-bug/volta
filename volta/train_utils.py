@@ -256,7 +256,7 @@ def freeze_layers(model):
     fixed_layers = set(model.config.fixed_layers)  # e.g. "bert.embeddings", "bert.v_embeddings.LayerNorm", "bert.encoder.layer.15.output.v_dense"
     for key, value in dict(model.named_parameters()).items():
         for name in fixed_layers:
-            if key.startswith(name):
+            if (key + '.').startswith(name + '.'):
                 value.requires_grad = False
 
 
