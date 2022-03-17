@@ -148,7 +148,7 @@ class WikipediasDataset(Dataset):
             tokens = self._tokenizer.encode(line)
 
             # add more tokens if len(tokens) < min_len
-            _cur = (ix + 1) % len(self.corpus)
+            _cur = (ix + 1) % len(self.corpus[lang])
             while len(tokens) < self._max_seq_length-2:
                 _cur_tokens = self._tokenizer.encode(self.corpus[lang][_cur]['text'])
                 tokens += _cur_tokens
